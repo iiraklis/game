@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game: Ball and Holes (Deterministic Random Layout)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f0f0f0;
+      font-family: sans-serif;
+      user-select: none;
+    }
+    /* Стандартное оформление для десктопов */
+    #gameArea {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      margin: 20px auto;
+      background: #fff;
+      border: 2px solid #333;
+      overflow: hidden;
+    }
+    #levelDisplay {
+      text-align: center;
+      font-size: 24px;
+      margin-top: 10px;
+    }
+    .ball {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: blue;
+      cursor: pointer;
+    }
+    .hole {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: black;
+    }
+    /* Для мобильных устройств: поле занимает весь экран */
+    @media (max-width: 800px) {
+      #gameArea {
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        border: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="levelDisplay">Level: 1</div>
+  <div id="gameArea"></div>
+
+  <script>
+    const gameArea = document.getElementById('gameArea');
+    const levelDisplay = document.getElementById('levelDisplay');
+
+    let currentLevel = 1;
+    let ball = null;
+    let holes = [];
+    let isDragging = false;
+    let offsetX = 0, offsetY = 0;
+
+    // Определяем размеры игрового поля динамически
+    let gameWidth = gameArea.clientWidth;
+    let gameHeight = gameArea.clientHeight;
+
+    const ballSize = 30;
+    const holeSize = 50;
+
+    // Объект для хранения позиций дырок для каждого уровня (детерминированное расположение)
+    const levelConfigs = {};
+
+    // Унифицированная функция для получения координат из mouse/touch события
+    function getClientCoords(e) {
+      if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.changedTouches && e.changedTouches.length > 0) {
+        return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+      }
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    // Инициализация уровня
+    function initLevel() {
+      // Обновляем размеры игрового поля (на случай изменения экрана)
+      gameWidth = gameArea.clientWidth;
+      gameHeight = gameArea.clientHeight;
+      
+      gameArea.innerHTML = '';
+      levelDisplay.textContent = `Level: ${currentLevel}`;
+      holes = [];
+
+      const numHoles = currentLevel;
+
+      // Если для этого уровня не сохранены позиции, генерируем их один раз.
+      if (!levelConfigs[currentLevel]) {
+        const positions = [];
+        for (let i = 0; i < numHoles; i++) {
+          const x = Math.random() * (gameWidth - holeSize);
+          const y = Math.random() * (gameHeight - holeSize);
+          positions.push({ x, y });
+        }
+        levelConfigs[currentLevel] = positions;
+      }
+      const positions = levelConfigs[currentLevel];
+
+      // Создаем дырки. Первая (индекс 0) считается реальной (для перехода на следующий уровень),
+      // остальные – фейковыми. Внешне все дырки выглядят одинаково.
+      for (let i = 0; i < numHoles; i++) {
+        const hole = document.createElement('div');
+        hole.classList.add('hole');
+        hole.dataset.real = (i === 0) ? "true" : "false";
+        const pos = positions[i];
+        hole.style.left = `${pos.x}px`;
+        hole.style.top = `${pos.y}px`;
+        gameArea.appendChild(hole);
+        holes.push(hole);
+      }
+
+      // Создаем шар и размещаем его по центру игрового поля.
+      ball = document.createElement('div');
+      ball.classList.add('ball');
+      const startX = (gameWidth - ballSize) / 2;
+      const startY = (gameHeight - ballSize) / 2;
+      ball.style.left = `${startX}px`;
+      ball.style.top = `${startY}px`;
+      gameArea.appendChild(ball);
+
+      // Обработчики для mouse и touch событий
+      ball.addEventListener('mousedown', startDrag);
+      ball.addEventListener('touchstart', startDrag, { passive: false });
+    }
+
+    function startDrag(e) {
+      e.preventDefault();
+      isDragging = true;
+      const coords = getClientCoords(e);
+      const ballRect = ball.getBoundingClientRect();
+      offsetX = coords.x - ballRect.left;
+      offsetY = coords.y - ballRect.top;
+      document.addEventListener('mousemove', drag);
+      document.addEventListener('mouseup', endDrag);
+      document.addEventListener('touchmove', drag, { passive: false });
+      document.addEventListener('touchend', endDrag);
+    }
+
+    function drag(e) {
+      if (!isDragging) return;
+      e.preventDefault();
+      const coords = getClientCoords(e);
+      const gameRect = gameArea.getBoundingClientRect();
+      let x = coords.x - gameRect.left - offsetX;
+      let y = coords.y - gameRect.top - offsetY;
+
+      // Ограничиваем перемещение шарика в пределах игрового поля
+      x = Math.max(0, Math.min(x, gameWidth - ballSize));
+      y = Math.max(0, Math.min(y, gameHeight - ballSize));
+
+      ball.style.left = `${x}px`;
+      ball.style.top = `${y}px`;
+    }
+
+    function endDrag(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      document.removeEventListener('mousemove', drag);
+      document.removeEventListener('mouseup', endDrag);
+      document.removeEventListener('touchmove', drag);
+      document.removeEventListener('touchend', endDrag);
+      checkCollision();
+    }
+
+    function checkCollision() {
+      const ballRect = ball.getBoundingClientRect();
+      const ballCenterX = ballRect.left + ballSize / 2;
+      const ballCenterY = ballRect.top + ballSize / 2;
+
+      for (let hole of holes) {
+        const holeRect = hole.getBoundingClientRect();
+        const holeCenterX = holeRect.left + holeSize / 2;
+        const holeCenterY = holeRect.top + holeSize / 2;
+        const dx = ballCenterX - holeCenterX;
+        const dy = ballCenterY - holeCenterY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const radius = holeSize / 2;
+        if (distance < radius) {
+          ball.style.transition = 'opacity 0.5s';
+          ball.style.opacity = '0';
+          setTimeout(() => {
+            if (hole.dataset.real === "true") {
+              currentLevel++;
+            } else {
+              currentLevel = Math.max(1, currentLevel - 1);
+            }
+            initLevel();
+          }, 500);
+          return;
+        }
+      }
+    }
+
+    initLevel();
+  </script>
+
+</body>
+</html>
