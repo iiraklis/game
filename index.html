@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Игра: Шар и Дыры (Детерминированное хаотичное расположение)</title>
+  <title>Game: Ball and Holes (Deterministic Random Layout)</title>
   <style>
     body {
       margin: 0;
@@ -45,7 +45,7 @@
 </head>
 <body>
 
-  <div id="levelDisplay">Уровень: 1</div>
+  <div id="levelDisplay">Level: 1</div>
   <div id="gameArea"></div>
 
   <script>
@@ -71,7 +71,7 @@
     // генерируем их хаотично, но один раз – затем при каждом переходе они будут такими же.
     function initLevel() {
       gameArea.innerHTML = '';
-      levelDisplay.textContent = `Уровень: ${currentLevel}`;
+      levelDisplay.textContent = `Level: ${currentLevel}`;
       holes = [];
 
       const numHoles = currentLevel;
