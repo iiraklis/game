@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Игра: Шар и Дыры (Детерминированное хаотичное расположение)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f0f0f0;
+      font-family: sans-serif;
+      user-select: none;
+    }
+    #gameArea {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      margin: 20px auto;
+      background: #fff;
+      border: 2px solid #333;
+      overflow: hidden;
+    }
+    #levelDisplay {
+      text-align: center;
+      font-size: 24px;
+      margin-top: 10px;
+    }
+    .ball {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: blue;
+      cursor: pointer;
+    }
+    .hole {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      /* Все дырки всегда выглядят одинаково – черные */
+      background: black;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="levelDisplay">Уровень: 1</div>
+  <div id="gameArea"></div>
+
+  <script>
+    const gameArea = document.getElementById('gameArea');
+    const levelDisplay = document.getElementById('levelDisplay');
+
+    let currentLevel = 1;
+    let ball = null;
+    let holes = [];
+    let isDragging = false;
+    let offsetX = 0, offsetY = 0;
+
+    const gameWidth = gameArea.clientWidth;
+    const gameHeight = gameArea.clientHeight;
+
+    const ballSize = 30;
+    const holeSize = 50;
+
+    // Объект для сохранения позиций дырок для каждого уровня.
+    const levelConfigs = {};
+
+    // Инициализация уровня: если для текущего уровня ещё не сгенерированы позиции дырок,
+    // генерируем их хаотично, но один раз – затем при каждом переходе они будут такими же.
+    function initLevel() {
+      gameArea.innerHTML = '';
+      levelDisplay.textContent = `Уровень: ${currentLevel}`;
+      holes = [];
+
+      const numHoles = currentLevel;
+
+      // Если для этого уровня не сохранены позиции, генерируем их.
+      if (!levelConfigs[currentLevel]) {
+        const positions = [];
+        for (let i = 0; i < numHoles; i++) {
+          // Генерируем позиции так, чтобы вся дырка помещалась в области игры.
+          const x = Math.random() * (gameWidth - holeSize);
+          const y = Math.random() * (gameHeight - holeSize);
+          positions.push({ x, y });
+        }
+        levelConfigs[currentLevel] = positions;
+      }
+      const positions = levelConfigs[currentLevel];
+
+      // Создаем дырки.
+      // Логика: всегда только одна реальная (для перехода вперёд) – отметим её data-атрибутом.
+      // Для детерминированности выбираем первую дырку (индекс 0) как реальную.
+      for (let i = 0; i < numHoles; i++) {
+        const hole = document.createElement('div');
+        hole.classList.add('hole');
+        if (i === 0) {
+          hole.dataset.real = "true";
+        } else {
+          hole.dataset.real = "false";
+        }
+        const pos = positions[i];
+        hole.style.left = `${pos.x}px`;
+        hole.style.top = `${pos.y}px`;
+        gameArea.appendChild(hole);
+        holes.push(hole);
+      }
+
+      // Создаем шар и размещаем его по центру.
+      ball = document.createElement('div');
+      ball.classList.add('ball');
+      const startX = (gameWidth - ballSize) / 2;
+      const startY = (gameHeight - ballSize) / 2;
+      ball.style.left = `${startX}px`;
+      ball.style.top = `${startY}px`;
+      gameArea.appendChild(ball);
+
+      ball.addEventListener('mousedown', startDrag);
+    }
+
+    function startDrag(e) {
+      isDragging = true;
+      const ballRect = ball.getBoundingClientRect();
+      offsetX = e.clientX - ballRect.left;
+      offsetY = e.clientY - ballRect.top;
+      document.addEventListener('mousemove', drag);
+      document.addEventListener('mouseup', endDrag);
+    }
+
+    function drag(e) {
+      if (!isDragging) return;
+      const gameRect = gameArea.getBoundingClientRect();
+      let x = e.clientX - gameRect.left - offsetX;
+      let y = e.clientY - gameRect.top - offsetY;
+
+      // Ограничиваем перемещение шарика рамками игрового поля.
+      x = Math.max(0, Math.min(x, gameWidth - ballSize));
+      y = Math.max(0, Math.min(y, gameHeight - ballSize));
+
+      ball.style.left = `${x}px`;
+      ball.style.top = `${y}px`;
+    }
+
+    function endDrag(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      document.removeEventListener('mousemove', drag);
+      document.removeEventListener('mouseup', endDrag);
+      checkCollision();
+    }
+
+    function checkCollision() {
+      const ballRect = ball.getBoundingClientRect();
+      const ballCenterX = ballRect.left + ballSize / 2;
+      const ballCenterY = ballRect.top + ballSize / 2;
+
+      for (let hole of holes) {
+        const holeRect = hole.getBoundingClientRect();
+        const holeCenterX = holeRect.left + holeSize / 2;
+        const holeCenterY = holeRect.top + holeSize / 2;
+        const dx = ballCenterX - holeCenterX;
+        const dy = ballCenterY - holeCenterY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const radius = holeSize / 2;
+        if (distance < radius) {
+          // Добавим эффект исчезновения шарика.
+          ball.style.transition = 'opacity 0.5s';
+          ball.style.opacity = '0';
+          setTimeout(() => {
+            if (hole.dataset.real === "true") {
+              // Попадание в реальную дырку – переход на следующий уровень.
+              currentLevel++;
+            } else {
+              // Попадание в фейковую – уровень снижается, но не ниже 1.
+              currentLevel = Math.max(1, currentLevel - 1);
+            }
+            initLevel();
+          }, 500);
+          return;
+        }
+      }
+    }
+
+    initLevel();
+  </script>
+
+</body>
+</html>
