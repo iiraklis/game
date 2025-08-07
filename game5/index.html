@@ -1,0 +1,1053 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+<!-- Copyright (c) 2025 IRAKLI IVANISHVILI Ball and Holes (Deterministic Random Layout) -->
+<!-- All rights reserved. Unauthorized use is prohibited. See LICENSE file for details. -->
+
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rally Car Dashboard</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            font-family: 'Orbitron', monospace;
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+        
+        .dashboard {
+            width: 100vw;
+            height: 100vh;
+            background: 
+                radial-gradient(circle at 30% 70%, rgba(255,100,0,0.1) 0%, transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(0,255,255,0.05) 0%, transparent 50%),
+                linear-gradient(45deg, #2a2a2a 0%, #1a1a1a 50%, #0f0f0f 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1000px;
+        }
+        
+        .cockpit {
+            width: 95%;
+            height: 90%;
+            background: 
+                linear-gradient(180deg, #333 0%, #222 50%, #111 100%);
+            border: 4px solid #444;
+            border-radius: 20px;
+            position: relative;
+            box-shadow: 
+                inset 0 0 50px rgba(255,100,0,0.1),
+                0 0 100px rgba(0,0,0,0.8);
+            transform: rotateX(5deg);
+            overflow: hidden;
+        }
+        
+        .gauge {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, #1a1a1a 0%, #000 70%);
+            border: 3px solid #666;
+            box-shadow: 
+                inset 0 0 20px rgba(0,0,0,0.8),
+                0 0 20px rgba(255,100,0,0.3);
+        }
+        
+        .gauge-face {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            background: radial-gradient(circle, #222 0%, #000 100%);
+        }
+        
+        .needle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            width: 3px;
+            background: linear-gradient(to top, #ff4400 0%, #ff8800 100%);
+            border-radius: 2px;
+            transition: transform 0.3s ease;
+            box-shadow: 0 0 10px rgba(255,68,0,0.8);
+        }
+        
+        .speedometer {
+            width: 200px;
+            height: 200px;
+            top: 20%;
+            left: 10%;
+        }
+        
+        .speedometer .needle {
+            height: 80px;
+            margin-left: -1.5px;
+            margin-top: -80px;
+        }
+        
+        .tachometer {
+            width: 180px;
+            height: 180px;
+            top: 20%;
+            right: 10%;
+        }
+        
+        .tachometer .needle {
+            height: 70px;
+            margin-left: -1.5px;
+            margin-top: -70px;
+            background: linear-gradient(to top, #00ff00 0%, #88ff00 100%);
+            box-shadow: 0 0 10px rgba(0,255,0,0.8);
+        }
+        
+        .fuel-gauge {
+            width: 120px;
+            height: 120px;
+            bottom: 30%;
+            left: 15%;
+        }
+        
+        .fuel-gauge .needle {
+            height: 50px;
+            margin-left: -1.5px;
+            margin-top: -50px;
+        }
+        
+        .boost-gauge {
+            width: 120px;
+            height: 120px;
+            bottom: 30%;
+            right: 15%;
+        }
+        
+        .boost-gauge .needle {
+            height: 50px;
+            margin-left: -1.5px;
+            margin-top: -50px;
+            background: linear-gradient(to top, #ff0066 0%, #ff3399 100%);
+            box-shadow: 0 0 10px rgba(255,0,102,0.8);
+        }
+        
+        .oil-pressure {
+            width: 100px;
+            height: 100px;
+            top: 60%;
+            left: 30%;
+        }
+        
+        .oil-pressure .needle {
+            height: 40px;
+            margin-left: -1.5px;
+            margin-top: -40px;
+        }
+        
+        .voltage-gauge {
+            width: 100px;
+            height: 100px;
+            top: 60%;
+            right: 30%;
+        }
+        
+        .voltage-gauge .needle {
+            height: 40px;
+            margin-left: -1.5px;
+            margin-top: -40px;
+            background: linear-gradient(to top, #0099ff 0%, #66ccff 100%);
+            box-shadow: 0 0 10px rgba(0,153,255,0.8);
+        }
+        
+        .gauge-label {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ccc;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .gauge-numbers {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            color: #aaa;
+            font-size: 8px;
+            font-weight: bold;
+        }
+        
+        .control-panel {
+            position: absolute;
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 25%;
+            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+            border: 2px solid #555;
+            border-radius: 15px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+        
+        .switch-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .toggle-switch {
+            width: 60px;
+            height: 30px;
+            background: linear-gradient(180deg, #444 0%, #222 100%);
+            border: 2px solid #666;
+            border-radius: 15px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .toggle-switch.active {
+            background: linear-gradient(180deg, #ff4400 0%, #cc3300 100%);
+            box-shadow: 0 0 20px rgba(255,68,0,0.6);
+        }
+        
+        .toggle-knob {
+            width: 26px;
+            height: 26px;
+            background: linear-gradient(135deg, #888 0%, #555 100%);
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+        
+        .toggle-switch.active .toggle-knob {
+            left: 32px;
+            background: linear-gradient(135deg, #ffaa66 0%, #ff6600 100%);
+        }
+        
+        .flip-switch {
+            width: 40px;
+            height: 60px;
+            background: linear-gradient(180deg, #333 0%, #111 100%);
+            border: 2px solid #666;
+            border-radius: 5px;
+            position: relative;
+            cursor: pointer;
+            perspective: 200px;
+        }
+        
+        .flip-lever {
+            width: 36px;
+            height: 25px;
+            background: linear-gradient(135deg, #666 0%, #333 100%);
+            border-radius: 3px;
+            position: absolute;
+            top: 3px;
+            left: 2px;
+            transition: transform 0.3s;
+            transform-origin: bottom center;
+        }
+        
+        .flip-switch.active .flip-lever {
+            transform: rotateX(180deg);
+            background: linear-gradient(135deg, #ff6600 0%, #cc3300 100%);
+        }
+        
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .slider {
+            width: 20px;
+            height: 100px;
+            background: linear-gradient(180deg, #333 0%, #111 100%);
+            border: 2px solid #666;
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .slider-handle {
+            width: 18px;
+            height: 20px;
+            background: linear-gradient(135deg, #888 0%, #555 100%);
+            border-radius: 3px;
+            position: absolute;
+            left: 1px;
+            transition: all 0.2s;
+            cursor: grab;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+        
+        .slider-handle:active {
+            cursor: grabbing;
+        }
+        
+        .knob {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: 
+                radial-gradient(circle at 30% 30%, #888 0%, #444 70%),
+                conic-gradient(from 0deg, #666 0deg, #333 180deg, #666 360deg);
+            border: 3px solid #555;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        
+        .knob::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 15px;
+            background: #ff4400;
+            border-radius: 2px;
+            box-shadow: 0 0 5px rgba(255,68,0,0.8);
+        }
+        
+        .indicator-light {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #333;
+            border: 1px solid #666;
+            margin: 2px;
+            transition: all 0.3s;
+        }
+        
+        .indicator-light.active {
+            background: radial-gradient(circle, #ff4400 0%, #cc3300 100%);
+            box-shadow: 0 0 15px rgba(255,68,0,0.8);
+        }
+        
+        .indicator-light.green.active {
+            background: radial-gradient(circle, #00ff00 0%, #00cc00 100%);
+            box-shadow: 0 0 15px rgba(0,255,0,0.8);
+        }
+        
+        .indicator-light.blue.active {
+            background: radial-gradient(circle, #0099ff 0%, #0066cc 100%);
+            box-shadow: 0 0 15px rgba(0,153,255,0.8);
+        }
+        
+        .control-label {
+            color: #aaa;
+            font-size: 8px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: center;
+        }
+        
+        .warning-lights {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .warning-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .center-console {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 150px;
+            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+            border: 2px solid #555;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        .blinking {
+            animation: blink 1s infinite;
+        }
+        
+        .lever {
+            width: 30px;
+            height: 80px;
+            background: linear-gradient(180deg, #666 0%, #333 100%);
+            border: 2px solid #555;
+            border-radius: 5px;
+            position: relative;
+            cursor: pointer;
+            transform-origin: bottom center;
+            transition: transform 0.3s;
+        }
+        
+        .lever::after {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #888 0%, #555 100%);
+            border-radius: 50%;
+            border: 1px solid #444;
+        }
+        
+        .digital-display {
+            position: absolute;
+            top: 15%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 40px;
+            background: #000;
+            border: 2px solid #444;
+            border-radius: 5px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 10px rgba(0,255,0,0.3);
+        }
+        
+        .vent {
+            position: absolute;
+            width: 60px;
+            height: 20px;
+            background: linear-gradient(90deg, transparent 0%, #333 20%, #333 80%, transparent 100%);
+            border-top: 1px solid #555;
+            border-bottom: 1px solid #555;
+        }
+        
+        .vent-1 { top: 5%; left: 20%; }
+        .vent-2 { top: 5%; right: 20%; }
+        
+        .vent::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background: #555;
+            top: 50%;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+      <button onclick="window.location.href='../index.html'" style="position: absolute; top: 50px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ⬅ Main Menu
+
+    <div class="dashboard">
+        <div class="cockpit">
+            <!-- Digital Display -->
+            <div class="digital-display" id="digitalDisplay">RALLY MODE ACTIVE</div>
+            
+            <!-- Main Gauges -->
+            <div class="gauge speedometer">
+                <div class="gauge-face">
+                    <div class="needle" id="speedNeedle"></div>
+                    <div class="gauge-label">SPEED km/h</div>
+                    <div class="gauge-numbers">
+                        <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%);">240</div>
+                        <div style="position: absolute; top: 30px; right: 20px;">200</div>
+                        <div style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);">160</div>
+                        <div style="position: absolute; bottom: 30px; right: 20px;">120</div>
+                        <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);">80</div>
+                        <div style="position: absolute; bottom: 30px; left: 20px;">40</div>
+                        <div style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%);">0</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="gauge tachometer">
+                <div class="gauge-face">
+                    <div class="needle" id="rpmNeedle"></div>
+                    <div class="gauge-label">RPM x1000</div>
+                    <div class="gauge-numbers">
+                        <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%);">8</div>
+                        <div style="position: absolute; top: 30px; right: 20px;">7</div>
+                        <div style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);">6</div>
+                        <div style="position: absolute; bottom: 30px; right: 20px;">5</div>
+                        <div style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);">4</div>
+                        <div style="position: absolute; bottom: 30px; left: 20px;">2</div>
+                        <div style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%);">0</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Secondary Gauges -->
+            <div class="gauge fuel-gauge">
+                <div class="gauge-face">
+                    <div class="needle" id="fuelNeedle" style="transform: rotate(-60deg);"></div>
+                    <div class="gauge-label">FUEL</div>
+                </div>
+            </div>
+            
+            <div class="gauge boost-gauge">
+                <div class="gauge-face">
+                    <div class="needle" id="boostNeedle"></div>
+                    <div class="gauge-label">BOOST</div>
+                </div>
+            </div>
+            
+            <div class="gauge oil-pressure">
+                <div class="gauge-face">
+                    <div class="needle" id="oilNeedle" style="transform: rotate(-45deg);"></div>
+                    <div class="gauge-label">OIL</div>
+                </div>
+            </div>
+            
+            <div class="gauge voltage-gauge">
+                <div class="gauge-face">
+                    <div class="needle" id="voltageNeedle" style="transform: rotate(-30deg);"></div>
+                    <div class="gauge-label">VOLT</div>
+                </div>
+            </div>
+            
+            <!-- Warning Lights -->
+            <div class="warning-lights">
+                <div class="warning-indicator">
+                    <div class="indicator-light" id="engineLight"></div>
+                    <div class="control-label">ENGINE</div>
+                </div>
+                <div class="warning-indicator">
+                    <div class="indicator-light green" id="oilLight"></div>
+                    <div class="control-label">OIL</div>
+                </div>
+                <div class="warning-indicator">
+                    <div class="indicator-light blue" id="tempLight"></div>
+                    <div class="control-label">TEMP</div>
+                </div>
+                <div class="warning-indicator">
+                    <div class="indicator-light" id="nitroLight"></div>
+                    <div class="control-label">NITRO</div>
+                </div>
+                <div class="warning-indicator">
+                    <div class="indicator-light green" id="turboLight"></div>
+                    <div class="control-label">TURBO</div>
+                </div>
+            </div>
+            
+            <!-- Center Console -->
+            <div class="center-console">
+                <div class="slider-container">
+                    <div class="slider" data-param="suspension">
+                        <div class="slider-handle" style="top: 60px;"></div>
+                    </div>
+                    <div class="control-label">SUSPENSION</div>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                    <div class="knob" id="radioKnob"></div>
+                    <div class="control-label">RADIO</div>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                    <div class="knob" id="fanKnob"></div>
+                    <div class="control-label">FAN</div>
+                </div>
+                
+                <div class="slider-container">
+                    <div class="slider" data-param="tuning">
+                        <div class="slider-handle" style="top: 40px;"></div>
+                    </div>
+                    <div class="control-label">TUNING</div>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                    <div class="lever" id="chassisLever"></div>
+                    <div class="control-label">CHASSIS</div>
+                </div>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <div class="switch-group">
+                    <div class="toggle-switch" data-control="lights">
+                        <div class="toggle-knob"></div>
+                    </div>
+                    <div class="control-label">LIGHTS</div>
+                </div>
+                
+                <div class="switch-group">
+                    <div class="flip-switch" data-control="nitro">
+                        <div class="flip-lever"></div>
+                    </div>
+                    <div class="control-label">NITRO</div>
+                </div>
+                
+                <div class="switch-group">
+                    <div class="toggle-switch" data-control="ac">
+                        <div class="toggle-knob"></div>
+                    </div>
+                    <div class="control-label">A/C</div>
+                </div>
+                
+                <div class="switch-group">
+                    <div class="flip-switch" data-control="turbo">
+                        <div class="flip-lever"></div>
+                    </div>
+                    <div class="control-label">TURBO</div>
+                </div>
+                
+                <div class="switch-group">
+                    <div class="toggle-switch" data-control="wipers">
+                        <div class="toggle-knob"></div>
+                    </div>
+                    <div class="control-label">WIPERS</div>
+                </div>
+                
+                <div class="switch-group">
+                    <div class="flip-switch" data-control="boost">
+                        <div class="flip-lever"></div>
+                    </div>
+                    <div class="control-label">BOOST</div>
+                </div>
+                
+                <div class="switch-group">
+                    <div class="toggle-switch" data-control="radio">
+                        <div class="toggle-knob"></div>
+                    </div>
+                    <div class="control-label">RADIO</div>
+                </div>
+            </div>
+            
+            <!-- Air Vents -->
+            <div class="vent vent-1"></div>
+            <div class="vent vent-2"></div>
+        </div>
+    </div>
+
+    <script>
+        class DashboardController {
+            constructor() {
+                this.state = {
+                    speed: 0,
+                    rpm: 0,
+                    fuel: 75,
+                    boost: 0,
+                    oil: 60,
+                    voltage: 12,
+                    lights: false,
+                    ac: false,
+                    wipers: false,
+                    radio: false,
+                    nitro: false,
+                    turbo: false,
+                    boostActive: false,
+                    suspension: 60,
+                    tuning: 40,
+                    radioFreq: 0,
+                    fanSpeed: 0,
+                    chassisUp: false
+                };
+                
+                this.isDragging = false;
+                this.dragElement = null;
+                this.init();
+                this.startAnimation();
+                this.createAmbientSound();
+            }
+            
+            init() {
+                this.setupEventListeners();
+                this.updateGauges();
+            }
+            
+            handleKnobDrag(e) {
+                const deltaY = this.knobStartY - e.clientY;
+                const rotation = this.knobStartRotation + (deltaY * 2);
+                const clampedRotation = Math.max(-180, Math.min(180, rotation));
+                
+                this.dragElement.style.transform = `rotate(${clampedRotation}deg)`;
+                
+                if (this.dragElement.id === 'radioKnob') {
+                    this.state.radioFreq = Math.round(((clampedRotation + 180) / 360) * 108 + 88);
+                } else if (this.dragElement.id === 'fanKnob') {
+                    this.state.fanSpeed = Math.round(((clampedRotation + 180) / 360) * 10);
+                }
+                
+                this.updateDisplay();
+            }
+            
+            getKnobRotation(knob) {
+                const transform = knob.style.transform;
+                const match = transform.match(/rotate\(([^)]+)deg\)/);
+                return match ? parseFloat(match[1]) : 0;
+            }
+            
+            toggleChassis(lever) {
+                this.state.chassisUp = !this.state.chassisUp;
+                const rotation = this.state.chassisUp ? -30 : 0;
+                lever.style.transform = `rotate(${rotation}deg)`;
+                this.playClickSound();
+            }
+            
+            endDrag() {
+                this.isDragging = false;
+                this.dragElement = null;
+            }
+            
+            updateGauges() {
+                // Speed needle (0-240 km/h, -90 to 90 degrees)
+                const speedAngle = (this.state.speed / 240) * 180 - 90;
+                document.getElementById('speedNeedle').style.transform = `rotate(${speedAngle}deg)`;
+                
+                // RPM needle (0-8000 RPM, -90 to 90 degrees)
+                const rpmAngle = (this.state.rpm / 8000) * 180 - 90;
+                document.getElementById('rpmNeedle').style.transform = `rotate(${rpmAngle}deg)`;
+                
+                // Fuel needle (0-100%, -60 to 60 degrees)
+                const fuelAngle = (this.state.fuel / 100) * 120 - 60;
+                document.getElementById('fuelNeedle').style.transform = `rotate(${fuelAngle}deg)`;
+                
+                // Boost needle (0-20, -45 to 45 degrees)
+                const boostAngle = (this.state.boost / 20) * 90 - 45;
+                document.getElementById('boostNeedle').style.transform = `rotate(${boostAngle}deg)`;
+                
+                // Oil pressure needle
+                const oilAngle = (this.state.oil / 100) * 90 - 45;
+                document.getElementById('oilNeedle').style.transform = `rotate(${oilAngle}deg)`;
+                
+                // Voltage needle
+                const voltageAngle = ((this.state.voltage - 10) / 4) * 60 - 30;
+                document.getElementById('voltageNeedle').style.transform = `rotate(${voltageAngle}deg)`;
+            }
+            
+            updateAllGauges() {
+                this.updateGauges();
+                this.updateDisplay();
+            }
+            
+            updateDisplay() {
+                const display = document.getElementById('digitalDisplay');
+                let message = 'RALLY MODE ACTIVE';
+                
+                if (this.state.nitro) message = 'NITRO ENGAGED';
+                else if (this.state.turbo) message = `TURBO BOOST ${this.state.boost.toFixed(1)}`;
+                else if (this.state.radio) message = `RADIO ${this.state.radioFreq} MHz`;
+                else if (this.state.speed > 0) message = `SPEED ${this.state.speed} KM/H`;
+                
+                display.textContent = message;
+            }
+            
+            playClickSound() {
+                // Simple click sound using Web Audio API
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.type = 'square';
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
+                    
+                    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.1);
+                } catch (e) {
+                    console.log('Audio context not available');
+                }
+            }
+            
+            createAmbientSound() {
+                // Create subtle ambient hum
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(60, audioContext.currentTime);
+                gainNode.gain.setValueAtTime(0.02, audioContext.currentTime);
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                try {
+                    oscillator.start();
+                } catch (e) {
+                    console.log('Audio context not available');
+                }
+            }
+            
+            setupEventListeners() {
+                // Toggle switches
+                document.querySelectorAll('.toggle-switch').forEach(toggle => {
+                    toggle.addEventListener('click', (e) => {
+                        const control = e.currentTarget.dataset.control;
+                        this.toggleControl(control, e.currentTarget);
+                    });
+                });
+                
+                // Flip switches
+                document.querySelectorAll('.flip-switch').forEach(flip => {
+                    flip.addEventListener('click', (e) => {
+                        const control = e.currentTarget.dataset.control;
+                        this.toggleControl(control, e.currentTarget);
+                    });
+                });
+                
+                // Sliders
+                document.querySelectorAll('.slider').forEach(slider => {
+                    const handle = slider.querySelector('.slider-handle');
+                    handle.addEventListener('mousedown', (e) => {
+                        this.startDrag(e, slider);
+                    });
+                });
+                
+                // Knobs
+                document.querySelectorAll('.knob').forEach(knob => {
+                    knob.addEventListener('mousedown', (e) => {
+                        this.startKnobDrag(e, knob);
+                    });
+                });
+                
+                // Lever
+                document.getElementById('chassisLever').addEventListener('click', (e) => {
+                    this.toggleChassis(e.currentTarget);
+                });
+                
+                // Global mouse events
+                document.addEventListener('mousemove', (e) => this.handleDrag(e));
+                document.addEventListener('mouseup', () => this.endDrag());
+            }
+            
+            toggleControl(control, element) {
+                this.state[control] = !this.state[control];
+                element.classList.toggle('active');
+                
+                // Update related systems
+                this.updateSystemState(control);
+                this.playClickSound();
+            }
+            
+            updateSystemState(control) {
+                switch(control) {
+                    case 'nitro':
+                        document.getElementById('nitroLight').classList.toggle('active', this.state.nitro);
+                        if (this.state.nitro) {
+                            this.state.speed = Math.min(this.state.speed + 40, 240);
+                            this.state.rpm = Math.min(this.state.rpm + 2000, 8000);
+                        }
+                        break;
+                    case 'turbo':
+                        document.getElementById('turboLight').classList.toggle('active', this.state.turbo);
+                        if (this.state.turbo) {
+                            this.state.boost = 15;
+                            this.state.rpm = Math.min(this.state.rpm + 1000, 8000);
+                        } else {
+                            this.state.boost = 0;
+                        }
+                        break;
+                    case 'boost':
+                        this.state.boostActive = !this.state.boostActive;
+                        if (this.state.boostActive) {
+                            this.state.boost = Math.min(this.state.boost + 10, 20);
+                        }
+                        break;
+                    case 'lights':
+                        document.getElementById('engineLight').classList.toggle('active', this.state.lights);
+                        break;
+                }
+                
+                this.updateGauges();
+                this.updateDisplay();
+            }
+            
+            startDrag(e, slider) {
+                this.isDragging = true;
+                this.dragElement = slider;
+                e.preventDefault();
+            }
+            
+            startKnobDrag(e, knob) {
+                this.isDragging = true;
+                this.dragElement = knob;
+                this.knobStartY = e.clientY;
+                this.knobStartRotation = this.getKnobRotation(knob);
+                e.preventDefault();
+            }
+            
+            handleDrag(e) {
+                if (!this.isDragging || !this.dragElement) return;
+                
+                if (this.dragElement.classList.contains('slider')) {
+                    this.handleSliderDrag(e);
+                } else if (this.dragElement.classList.contains('knob')) {
+                    this.handleKnobDrag(e);
+                }
+            }
+            
+            handleSliderDrag(e) {
+                const slider = this.dragElement;
+                const handle = slider.querySelector('.slider-handle');
+                const rect = slider.getBoundingClientRect();
+                const y = Math.max(0, Math.min(80, e.clientY - rect.top));
+                
+                handle.style.top = y + 'px';
+                
+                const param = slider.dataset.param;
+                const value = Math.round(((80 - y) / 80) * 100);
+                this.state[param] = value;
+                
+                // Update system based on slider changes
+                if (param === 'suspension') {
+                    // Adjust handling characteristics
+                    this.state.oil = Math.min(100, this.state.oil + (value - this.state.suspension) * 0.1);
+                } else if (param === 'tuning') {
+                    // Adjust performance characteristics
+                    this.state.boost = Math.min(20, this.state.boost + (value - this.state.tuning) * 0.05);
+                }
+                
+                this.updateAllGauges();
+                this.playClickSound();
+            }
+            
+            startAnimation() {
+                // Simulate engine activity
+                setInterval(() => {
+                    if (!this.isDragging) {
+                        // Subtle RPM fluctuation
+                        if (this.state.rpm > 0) {
+                            this.state.rpm += (Math.random() - 0.5) * 100;
+                            this.state.rpm = Math.max(500, Math.min(8000, this.state.rpm));
+                        }
+                        
+                        // Speed changes based on RPM
+                        if (this.state.rpm > 1000) {
+                            this.state.speed = Math.max(0, this.state.speed + (Math.random() - 0.5) * 5);
+                            this.state.speed = Math.min(240, this.state.speed);
+                        } else {
+                            this.state.speed = Math.max(0, this.state.speed - 2);
+                        }
+                        
+                        // Fuel consumption
+                        if (this.state.speed > 0) {
+                            this.state.fuel -= 0.01;
+                            this.state.fuel = Math.max(0, this.state.fuel);
+                        }
+                        
+                        // Update gauges
+                        this.updateGauges();
+                    }
+                    
+                    // Blinking lights
+                    if (this.state.nitro) {
+                        document.getElementById('nitroLight').classList.toggle('blinking');
+                    }
+                    
+                    if (this.state.fuel < 20) {
+                        document.getElementById('engineLight').classList.add('blinking');
+                    } else {
+                        document.getElementById('engineLight').classList.remove('blinking');
+                    }
+                    
+                }, 100);
+                
+                // Start with some initial engine activity
+                setTimeout(() => {
+                    this.state.rpm = 1000;
+                    this.state.speed = 20;
+                    document.getElementById('oilLight').classList.add('active');
+                    document.getElementById('tempLight').classList.add('active');
+                    this.updateGauges();
+                }, 1000);
+            }
+        }
+        
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new DashboardController();
+        });
+        
+        // Prevent context menu on right click
+        document.addEventListener('contextmenu', e => e.preventDefault());
+    </script>
+</body>
+</html>
