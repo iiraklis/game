@@ -1,0 +1,713 @@
+<!-- Copyright (c) 2025 IRAKLI IVANISHVILI Ball and Holes (Deterministic Random Layout) -->
+<!-- All rights reserved. Unauthorized use is prohibited. See LICENSE file for details. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Football - Realistic Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 50%, #228B22 100%);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border: 2px solid #2F4F4F;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        
+        .ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-size: 12px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+        }
+    </style>
+</head>
+<body>
+
+      <button onclick="window.location.href='../index.html'" style="position: absolute; top: 20px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ⬅ Main Menu
+  </button>
+
+    <div class="ui">
+<div>Score: <span id="score">0 - 0</span></div>
+<div>Time: <span id="time">00:00</span></div>
+
+    </div>
+    
+    <div class="controls">
+        Controls: Arrows - Move | Space - Kick/Pass (Hold for stronger kick)
+    </div>
+    
+    <canvas id="gameCanvas" width="1200" height="700"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Игровые переменные
+        let gameTime = 0;
+        let playerScore = 0;
+        let aiScore = 0;
+        let gameRunning = true;
+        let kickPower = 0;
+        let isCharging = false;
+        let ballPossession = null;
+        let lastGoalBy = null;
+        
+        // Физика
+        const friction = 0.95;
+        const playerSpeed = 2;
+        const aiSpeed = 1.5;
+        
+        // Управление
+        const keys = {};
+        
+        // Мяч
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            vx: 0,
+            vy: 0,
+            radius: 8,
+            possessed: false,
+            possessor: null
+        };
+        
+        // Класс игрока
+        class Player {
+            constructor(x, y, team, isGoalkeeper = false, number = 1) {
+                this.x = x;
+                this.y = y;
+                this.team = team; // 'white' or 'orange'
+                this.isGoalkeeper = isGoalkeeper;
+                this.number = number;
+                this.vx = 0;
+                this.vy = 0;
+                this.radius = 12;
+                this.controlled = false;
+                this.target = { x: x, y: y };
+                this.speed = isGoalkeeper ? 1.8 : (team === 'white' ? playerSpeed : aiSpeed);
+                this.skill = isGoalkeeper ? 8 : (team === 'white' ? 10 : 7);
+            }
+            
+            update() {
+                if (this.team === 'white' && this.controlled) {
+                    // Управление игроком
+                    this.vx = 0;
+                    this.vy = 0;
+                    
+                    if (keys['ArrowUp']) this.vy = -this.speed;
+                    if (keys['ArrowDown']) this.vy = this.speed;
+                    if (keys['ArrowLeft']) this.vx = -this.speed;
+                    if (keys['ArrowRight']) this.vx = this.speed;
+                    
+                } else if (this.team === 'orange' || (this.team === 'white' && !this.controlled)) {
+                    // ИИ для оранжевых или неконтролируемых белых
+                    this.aiLogic();
+                }
+                
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Границы поля
+                this.x = Math.max(50, Math.min(canvas.width - 50, this.x));
+                this.y = Math.max(50, Math.min(canvas.height - 50, this.y));
+                
+                // Проверка владения мячом
+                if (this.distanceTo(ball) < this.radius + ball.radius && !ball.possessed) {
+                    ball.possessed = true;
+                    ball.possessor = this;
+                    ballPossession = this.team;
+                    
+                    if (this.team === 'white') {
+                        this.controlled = true;
+                        // Убираем контроль у других белых игроков
+                        players.forEach(p => {
+                            if (p !== this && p.team === 'white') {
+                                p.controlled = false;
+                            }
+                        });
+                    }
+                }
+            }
+            
+            aiLogic() {
+                if (this.isGoalkeeper) {
+                    this.goalkeeperAI();
+                } else {
+                    this.fieldPlayerAI();
+                }
+            }
+            
+            goalkeeperAI() {
+                const goalX = this.team === 'white' ? 30 : canvas.width - 30;
+                const goalCenterY = canvas.height / 2;
+                
+                // Следить за мячом если он близко к воротам
+                const distToBall = this.distanceTo(ball);
+                const ballDistToGoal = Math.abs(ball.x - goalX);
+                
+                if (ballDistToGoal < 200 && ball.vx !== 0 && ball.vy !== 0) {
+                    // Предсказать траекторию мяча
+                    const predictedY = ball.y + (ball.vy * 20);
+                    this.moveTowards(goalX, Math.max(150, Math.min(canvas.height - 150, predictedY)));
+                } else {
+                    // Стоять в центре ворот
+                    this.moveTowards(goalX, goalCenterY);
+                }
+                
+                // Попытка поймать мяч
+                if (distToBall < 50 && ballDistToGoal < 100) {
+                    this.moveTowards(ball.x, ball.y);
+                    
+                    if (distToBall < this.radius + ball.radius + 5) {
+                        // Поймал мяч - делает сильный удар до середины поля
+                        const midFieldX = canvas.width / 2;
+                        const power = 15;
+                        const dx = midFieldX - ball.x;
+                        const dy = (canvas.height / 2) - ball.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        ball.vx = (dx / dist) * power;
+                        ball.vy = (dy / dist) * power;
+                        ball.possessed = false;
+                        ball.possessor = null;
+                        ballPossession = null;
+                    }
+                }
+            }
+            
+            fieldPlayerAI() {
+                const distToBall = this.distanceTo(ball);
+                
+                if (ball.possessor === this) {
+                    // У этого игрока мяч - идти к воротам противника
+                    const enemyGoalX = this.team === 'orange' ? 50 : canvas.width - 50;
+                    const enemyGoalY = canvas.height / 2;
+                    
+                    this.moveTowards(enemyGoalX, enemyGoalY);
+                    
+                    // Иногда делать пас или удар
+                    if (Math.random() < 0.02) {
+                        this.kick();
+                    }
+                    
+                } else if (ballPossession !== this.team) {
+                    // Мяч у противника - только ближайший идет к мячу
+                    const teamMates = players.filter(p => p.team === this.team && !p.isGoalkeeper && p !== this);
+                    let isClosest = true;
+                    
+                    for (let mate of teamMates) {
+                        if (mate.distanceTo(ball) < distToBall) {
+                            isClosest = false;
+                            break;
+                        }
+                    }
+                    
+                    if (isClosest && !ball.possessed) {
+                        // Только ближайший бежит к мячу
+                        this.moveTowards(ball.x, ball.y);
+                    } else {
+                        // Остальные держат позицию и ждут
+                        this.holdPosition();
+                    }
+                    
+                } else {
+                    // Мяч у союзника - держать позицию для поддержки
+                    this.holdPosition();
+                }
+            }
+            
+            holdPosition() {
+                // Каждый игрок держит свою позицию в зависимости от номера и команды
+                let targetX, targetY;
+                
+                if (this.team === 'orange') {
+                    // Оранжевая команда (правая сторона)
+                    switch (this.number) {
+                        case 2: case 3: case 4: case 5: // Защитники
+                            targetX = canvas.width - 300;
+                            targetY = 150 + ((this.number - 2) * 133);
+                            break;
+                        case 6: case 7: case 8: // Полузащитники
+                            targetX = canvas.width - 500;
+                            targetY = 200 + ((this.number - 6) * 150);
+                            break;
+                        default: // Нападающие
+                            targetX = canvas.width - 700;
+                            targetY = 250 + ((this.number - 9) * 100);
+                    }
+                } else {
+                    // Белая команда (левая сторона)
+                    switch (this.number) {
+                        case 2: case 3: case 4: case 5: // Защитники
+                            targetX = 300;
+                            targetY = 150 + ((this.number - 2) * 133);
+                            break;
+                        case 6: case 7: case 8: // Полузащитники
+                            targetX = 500;
+                            targetY = 200 + ((this.number - 6) * 150);
+                            break;
+                        default: // Нападающие
+                            targetX = 700;
+                            targetY = 250 + ((this.number - 9) * 100);
+                    }
+                }
+                
+                // Медленно возвращаться к позиции
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 20) {
+                    this.vx = (dx / dist) * (this.speed * 0.5);
+                    this.vy = (dy / dist) * (this.speed * 0.5);
+                } else {
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+            }
+            
+            moveTowards(targetX, targetY) {
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 5) {
+                    this.vx = (dx / dist) * this.speed;
+                    this.vy = (dy / dist) * this.speed;
+                } else {
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+            }
+            
+            kick(power = 10) {
+                if (ball.possessor === this) {
+                    let targetX, targetY;
+                    
+                    if (this.team === 'white') {
+                        // Игрок стреляет в правые ворота
+                        targetX = canvas.width - 30;
+                        targetY = canvas.height / 2 + (Math.random() - 0.5) * 100;
+                    } else {
+                        // ИИ стреляет в левые ворота
+                        targetX = 30;
+                        targetY = canvas.height / 2 + (Math.random() - 0.5) * 100;
+                    }
+                    
+                    const dx = targetX - ball.x;
+                    const dy = targetY - ball.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    ball.vx = (dx / dist) * power;
+                    ball.vy = (dy / dist) * power;
+                    ball.possessed = false;
+                    ball.possessor = null;
+                    ballPossession = null;
+                    
+                    // Убираем контроль у игрока
+                    this.controlled = false;
+                }
+            }
+            
+            distanceTo(obj) {
+                const dx = this.x - obj.x;
+                const dy = this.y - obj.y;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+            
+            draw() {
+                // Тень
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.beginPath();
+                ctx.ellipse(this.x + 2, this.y + 15, this.radius, this.radius * 0.3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Игрок
+                ctx.fillStyle = this.team === 'white' ? '#FFFFFF' : '#FF8C00';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Номер или индикатор управления
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                
+                if (this.controlled && this.team === 'white') {
+                    // Цифра 1 над головой
+                    ctx.fillStyle = '#FF0000';
+                    ctx.fillText('1', this.x, this.y - 20);
+                } else if (this.isGoalkeeper) {
+                    ctx.fillText('G', this.x, this.y + 4);
+                } else {
+                    ctx.fillText(this.number, this.x, this.y + 4);
+                }
+            }
+        }
+        
+        // Создание игроков
+        const players = [];
+        
+        // Белая команда (игрок)
+        players.push(new Player(80, canvas.height / 2, 'white', true, 1)); // Вратарь
+        for (let i = 0; i < 10; i++) {
+            const x = 200 + (i % 5) * 100;
+            const y = 150 + Math.floor(i / 5) * 400;
+            players.push(new Player(x, y, 'white', false, i + 2));
+        }
+        
+        // Оранжевая команда (ИИ)
+        players.push(new Player(canvas.width - 80, canvas.height / 2, 'orange', true, 1)); // Вратарь
+        for (let i = 0; i < 10; i++) {
+            const x = canvas.width - 200 - (i % 5) * 100;
+            const y = 150 + Math.floor(i / 5) * 400;
+            players.push(new Player(x, y, 'orange', false, i + 2));
+        }
+        
+        // Управление ближайшим к мячу белым игроком
+        function updateBallControl() {
+            if (!ball.possessed) {
+                let closest = null;
+                let minDist = Infinity;
+                
+                players.forEach(player => {
+                    if (player.team === 'white' && !player.isGoalkeeper) {
+                        const dist = player.distanceTo(ball);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closest = player;
+                        }
+                    }
+                });
+                
+                // Убираем контроль у всех белых игроков
+                players.forEach(p => {
+                    if (p.team === 'white') p.controlled = false;
+                });
+                
+                // Даем контроль ближайшему
+                if (closest) {
+                    closest.controlled = true;
+                }
+            }
+        }
+        
+        // Обновление мяча
+        function updateBall() {
+            if (ball.possessed && ball.possessor) {
+                // Мяч следует за игроком
+                ball.x = ball.possessor.x + Math.cos(Date.now() * 0.01) * 20;
+                ball.y = ball.possessor.y + 15;
+                ball.vx = 0;
+                ball.vy = 0;
+            } else {
+                // Свободный мяч
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+                
+                // Трение
+                ball.vx *= friction;
+                ball.vy *= friction;
+                
+                // Остановка мяча при низкой скорости
+                if (Math.abs(ball.vx) < 0.1 && Math.abs(ball.vy) < 0.1) {
+                    ball.vx = 0;
+                    ball.vy = 0;
+                }
+                
+                // Границы поля
+                if (ball.x <= ball.radius + 50 || ball.x >= canvas.width - ball.radius - 50) {
+                    ball.vx *= -0.7;
+                }
+                if (ball.y <= ball.radius + 50 || ball.y >= canvas.height - ball.radius - 50) {
+                    ball.vy *= -0.7;
+                }
+                
+                ball.x = Math.max(ball.radius + 50, Math.min(canvas.width - ball.radius - 50, ball.x));
+                ball.y = Math.max(ball.radius + 50, Math.min(canvas.height - ball.radius - 50, ball.y));
+            }
+            
+            // Проверка гола
+            checkGoal();
+        }
+        
+        function checkGoal() {
+            const goalWidth = 120;
+            const goalTop = canvas.height / 2 - goalWidth / 2;
+            const goalBottom = canvas.height / 2 + goalWidth / 2;
+            
+            // Гол в правые ворота (белые забили)
+            if (ball.x >= canvas.width - 50 && ball.y >= goalTop && ball.y <= goalBottom) {
+                playerScore++;
+                resetAfterGoal('orange');
+            }
+            
+            // Гол в левые ворота (оранжевые забили)
+            if (ball.x <= 50 && ball.y >= goalTop && ball.y <= goalBottom) {
+                aiScore++;
+                resetAfterGoal('white');
+            }
+        }
+        
+        function resetAfterGoal(startingTeam) {
+            // Мяч в центр
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.vx = 0;
+            ball.vy = 0;
+            ball.possessed = false;
+            ball.possessor = null;
+            ballPossession = null;
+            
+            // Если белые начинают, делаем автопас
+            if (startingTeam === 'white') {
+                setTimeout(() => {
+                    // Находим двух ближайших белых игроков к центру
+                    const whitePlayers = players.filter(p => p.team === 'white' && !p.isGoalkeeper);
+                    whitePlayers.sort((a, b) => a.distanceTo(ball) - b.distanceTo(ball));
+                    
+                    if (whitePlayers.length >= 2) {
+                        const passer = whitePlayers[0];
+                        const receiver = whitePlayers[1];
+                        
+                        // Автопас
+                        const dx = receiver.x - ball.x;
+                        const dy = receiver.y - ball.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        ball.vx = (dx / dist) * 5;
+                        ball.vy = (dy / dist) * 5;
+                    }
+                }, 1000);
+            }
+            
+            updateBallControl();
+            updateScore();
+        }
+        
+        function updateScore() {
+            document.getElementById('score').textContent = `${playerScore} - ${aiScore}`;
+        }
+        
+        // Отрисовка поля
+        function drawField() {
+            // Фон - небо и трава
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(0.3, '#98FB98');
+            gradient.addColorStop(1, '#228B22');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Поле
+            ctx.fillStyle = '#32CD32';
+            ctx.fillRect(50, 50, canvas.width - 100, canvas.height - 100);
+            
+            // Разметка поля
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 3;
+            
+            // Внешние границы
+            ctx.strokeRect(50, 50, canvas.width - 100, canvas.height - 100);
+            
+            // Центральная линия
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 50);
+            ctx.lineTo(canvas.width / 2, canvas.height - 50);
+            ctx.stroke();
+            
+            // Центральный круг
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 80, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Штрафные зоны
+            ctx.strokeRect(50, canvas.height / 2 - 120, 100, 240);
+            ctx.strokeRect(canvas.width - 150, canvas.height / 2 - 120, 100, 240);
+            
+            // Ворота
+            drawGoal(30, canvas.height / 2, 'left');
+            drawGoal(canvas.width - 30, canvas.height / 2, 'right');
+        }
+        
+        function drawGoal(x, centerY, side) {
+            const goalWidth = 20;
+            const goalHeight = 120;
+            const netDepth = 15;
+            
+            // Стойки ворот
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(x, centerY - goalHeight / 2);
+            ctx.lineTo(x, centerY + goalHeight / 2);
+            ctx.stroke();
+            
+            // Перекладина
+            ctx.beginPath();
+            if (side === 'left') {
+                ctx.moveTo(x, centerY - goalHeight / 2);
+                ctx.lineTo(x - netDepth, centerY - goalHeight / 2);
+                ctx.moveTo(x, centerY + goalHeight / 2);
+                ctx.lineTo(x - netDepth, centerY + goalHeight / 2);
+                ctx.moveTo(x - netDepth, centerY - goalHeight / 2);
+                ctx.lineTo(x - netDepth, centerY + goalHeight / 2);
+            } else {
+                ctx.moveTo(x, centerY - goalHeight / 2);
+                ctx.lineTo(x + netDepth, centerY - goalHeight / 2);
+                ctx.moveTo(x, centerY + goalHeight / 2);
+                ctx.lineTo(x + netDepth, centerY + goalHeight / 2);
+                ctx.moveTo(x + netDepth, centerY - goalHeight / 2);
+                ctx.lineTo(x + netDepth, centerY + goalHeight / 2);
+            }
+            ctx.stroke();
+            
+            // Сетка
+            ctx.strokeStyle = '#CCCCCC';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 8; i++) {
+                const y = centerY - goalHeight / 2 + (i * goalHeight / 7);
+                ctx.beginPath();
+                if (side === 'left') {
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x - netDepth, y);
+                } else {
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + netDepth, y);
+                }
+                ctx.stroke();
+            }
+        }
+        
+        // Отрисовка мяча
+        function drawBall() {
+            // Тень мяча
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(ball.x + 2, ball.y + 8, ball.radius, ball.radius * 0.3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Мяч
+            ctx.fillStyle = '#FFFFFF';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Узор мяча
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius * 0.7, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            for (let i = 0; i < 6; i++) {
+                const angle = (i * Math.PI * 2) / 6;
+                ctx.beginPath();
+                ctx.moveTo(ball.x, ball.y);
+                ctx.lineTo(ball.x + Math.cos(angle) * ball.radius * 0.7, 
+                          ball.y + Math.sin(angle) * ball.radius * 0.7);
+                ctx.stroke();
+            }
+        }
+        
+        // Основной игровой цикл
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // Обновление времени
+            gameTime += 1/60;
+            const minutes = Math.floor(gameTime / 60);
+            const seconds = Math.floor(gameTime % 60);
+            document.getElementById('time').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Обновление игры
+            updateBallControl();
+            players.forEach(player => player.update());
+            updateBall();
+            
+            // Отрисовка
+            drawField();
+            drawBall();
+            players.forEach(player => player.draw());
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Обработка ввода
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (!isCharging) {
+                    isCharging = true;
+                    kickPower = 0;
+                    
+                    const chargeInterval = setInterval(() => {
+                        kickPower += 0.5;
+                        kickPower = Math.min(kickPower, 20);
+                    }, 50);
+                    
+                    const releaseHandler = () => {
+                        document.removeEventListener('keyup', keyUpHandler);
+                        clearInterval(chargeInterval);
+                        
+                        // Найти контролируемого игрока и сделать удар
+                        const controlledPlayer = players.find(p => p.controlled && p.team === 'white');
+                        if (controlledPlayer && ball.possessor === controlledPlayer) {
+                            controlledPlayer.kick(Math.max(5, kickPower));
+                        }
+                        
+                        isCharging = false;
+                        kickPower = 0;
+                    };
+                    
+                    const keyUpHandler = (upEvent) => {
+                        if (upEvent.code === 'Space') {
+                            releaseHandler();
+                        }
+                    };
+                    
+                    document.addEventListener('keyup', keyUpHandler);
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Запуск игры
+        resetAfterGoal('white');
+        gameLoop();
+    </script>
+</body>
+</html>
