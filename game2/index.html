@@ -1,0 +1,568 @@
+<!-- Copyright (c) 2025 IRAKLI IVANISHVILI Ball and Holes (Deterministic Random Layout) -->
+<!-- All rights reserved. Unauthorized use is prohibited. See LICENSE file for details. -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Реалистичный Баскетбол 2D</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 30%, #87CEEB 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 40%, #90EE90 100%);
+        }
+
+        #scoreBoard {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            border: 3px solid #FFD700;
+        }
+
+        #goalEffect {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 3px 3px 6px #000;
+            display: none;
+            animation: goalPulse 2s ease-out;
+        }
+
+        @keyframes goalPulse {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="scoreBoard">
+            <div>ОЧКИ: <span id="score">0</span></div>
+        </div>
+        <div id="goalEffect">GOAL!</div>
+        <div id="controls">
+            <div>←→ - Движение | ↑↓ - Перемещение | SPACE - Дриблинг | CTRL - Бросок | ALT - Поднять мяч</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const goalEffect = document.getElementById('goalEffect');
+
+        // Установка размеров canvas
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Игровые переменные
+        let score = 0;
+        let keys = {};
+        
+        // Игрок
+        const player = {
+            x: 150,
+            y: canvas.height - 200,
+            width: 60,
+            height: 80,
+            hasBall: true,
+            isDribbling: false,
+            dribbleOffset: 0
+        };
+
+        // Мяч
+        const ball = {
+            x: player.x + 30,
+            y: player.y + 40,
+            radius: 15,
+            velocityX: 0,
+            velocityY: 0,
+            onGround: true,
+            bounces: 0,
+            maxBounces: 3
+        };
+
+        // Корзина
+        const basket = {
+            x: canvas.width - 150,
+            y: canvas.height - 350,
+            width: 80,
+            height: 60
+        };
+
+        // Облака
+        const clouds = [
+            {x: 100, y: 50, size: 60},
+            {x: 300, y: 80, size: 40},
+            {x: 500, y: 60, size: 50},
+            {x: 700, y: 90, size: 45}
+        ];
+
+        // Птицы
+        const birds = [
+            {x: 200, y: 120, wingOffset: 0},
+            {x: 400, y: 100, wingOffset: Math.PI},
+            {x: 600, y: 130, wingOffset: Math.PI/2}
+        ];
+
+        // Обработка клавиш
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (player.hasBall) {
+                    player.isDribbling = !player.isDribbling;
+                }
+            }
+            
+            if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+                e.preventDefault();
+                if (player.hasBall) {
+                    shootBall();
+                }
+            }
+            
+            if (e.code === 'AltLeft' || e.code === 'AltRight') {
+                e.preventDefault();
+                tryPickUpBall();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // Функция стрельбы
+        function shootBall() {
+            if (!player.hasBall) return;
+            
+            player.hasBall = false;
+            player.isDribbling = false;
+            ball.x = player.x + 30;
+            ball.y = player.y + 20;
+            
+            const targetX = basket.x + 40;
+            const targetY = basket.y + 30;
+            
+            const deltaX = targetX - ball.x;
+            const deltaY = targetY - ball.y;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            
+            const speed = 12;
+            ball.velocityX = (deltaX / distance) * speed;
+            ball.velocityY = (deltaY / distance) * speed - 5; // Добавляем дугу
+            ball.onGround = false;
+            ball.bounces = 0;
+        }
+
+        // Попытка поднять мяч
+        function tryPickUpBall() {
+            if (player.hasBall) return;
+            
+            const distance = Math.sqrt(
+                (player.x + 30 - ball.x) ** 2 + 
+                (player.y + 40 - ball.y) ** 2
+            );
+            
+            if (distance < 50 && ball.onGround) {
+                player.hasBall = true;
+                ball.velocityX = 0;
+                ball.velocityY = 0;
+            }
+        }
+
+        // Проверка попадания в корзину
+        function checkBasket() {
+            if (ball.x > basket.x - 10 && ball.x < basket.x + 90 &&
+                ball.y > basket.y + 20 && ball.y < basket.y + 50) {
+                score++;
+                scoreElement.textContent = score;
+                showGoalEffect();
+                
+                // Мяч падает вниз после попадания
+                ball.velocityX = (Math.random() - 0.5) * 2;
+                ball.velocityY = 3;
+            }
+        }
+
+        // Эффект гола
+        function showGoalEffect() {
+            goalEffect.style.display = 'block';
+            setTimeout(() => {
+                goalEffect.style.display = 'none';
+            }, 2000);
+        }
+
+        // Рисование фона
+        function drawBackground() {
+            // Небо уже задано градиентом в CSS
+            
+            // Солнце
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(canvas.width - 100, 100, 40, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Лучи солнца
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI * 2) / 8;
+                const x1 = canvas.width - 100 + Math.cos(angle) * 50;
+                const y1 = 100 + Math.sin(angle) * 50;
+                const x2 = canvas.width - 100 + Math.cos(angle) * 70;
+                const y2 = 100 + Math.sin(angle) * 70;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+
+            // Облака
+            clouds.forEach(cloud => {
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.size * 0.6, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 25, cloud.y, cloud.size * 0.8, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 50, cloud.y, cloud.size * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+                
+                cloud.x -= 0.2;
+                if (cloud.x < -100) cloud.x = canvas.width + 100;
+            });
+
+            // Птицы
+            birds.forEach(bird => {
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                bird.wingOffset += 0.3;
+                const wingFlap = Math.sin(bird.wingOffset) * 10;
+                
+                ctx.beginPath();
+                ctx.moveTo(bird.x - 8, bird.y + wingFlap);
+                ctx.lineTo(bird.x, bird.y);
+                ctx.lineTo(bird.x + 8, bird.y + wingFlap);
+                ctx.stroke();
+                
+                bird.x -= 0.5;
+                if (bird.x < -20) bird.x = canvas.width + 20;
+            });
+
+            // Здания на фоне
+            drawBuildings();
+        }
+
+        // Рисование зданий
+        function drawBuildings() {
+            // Левое здание
+            ctx.fillStyle = '#888';
+            ctx.fillRect(0, canvas.height - 400, 80, 300);
+            ctx.fillStyle = '#666';
+            ctx.fillRect(10, canvas.height - 380, 15, 15);
+            ctx.fillRect(30, canvas.height - 380, 15, 15);
+            ctx.fillRect(50, canvas.height - 380, 15, 15);
+
+            // Правое здание
+            ctx.fillStyle = '#999';
+            ctx.fillRect(canvas.width - 100, canvas.height - 450, 100, 350);
+            ctx.fillStyle = '#777';
+            for (let i = 0; i < 5; i++) {
+                for (let j = 0; j < 3; j++) {
+                    ctx.fillRect(canvas.width - 90 + j * 25, canvas.height - 430 + i * 30, 15, 20);
+                }
+            }
+
+            // Деревья
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(120, canvas.height - 150, 15, 50);
+            ctx.fillStyle = '#228B22';
+            ctx.beginPath();
+            ctx.arc(127, canvas.height - 150, 25, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Рисование площадки
+        function drawCourt() {
+            // Основная площадка
+            ctx.fillStyle = '#D2691E';
+            ctx.fillRect(80, canvas.height - 120, canvas.width - 160, 120);
+            
+            // Линии площадки
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            
+            // Центральная линия
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, canvas.height - 120);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+            
+            // Центральный круг
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height - 60, 40, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Трехочковая линия
+            ctx.beginPath();
+            ctx.arc(basket.x + 40, canvas.height - 60, 100, Math.PI * 1.2, Math.PI * 1.8);
+            ctx.stroke();
+
+            // Штрафная зона
+            ctx.strokeRect(basket.x - 60, canvas.height - 120, 160, 120);
+        }
+
+        // Рисование корзины
+        function drawBasket() {
+            // Опора
+            ctx.fillStyle = '#666';
+            ctx.fillRect(basket.x + 35, basket.y + 60, 10, canvas.height - basket.y - 60);
+            
+            // Щит
+            ctx.fillStyle = 'white';
+            ctx.fillRect(basket.x - 10, basket.y - 20, 100, 80);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(basket.x - 10, basket.y - 20, 100, 80);
+            
+            // Квадрат на щите
+            ctx.strokeRect(basket.x + 20, basket.y + 10, 40, 30);
+            
+            // Обод корзины
+            ctx.strokeStyle = '#FF4500';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.ellipse(basket.x + 40, basket.y + 45, 35, 8, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Сетка
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI * 2) / 8;
+                const x1 = basket.x + 40 + Math.cos(angle) * 35;
+                const y1 = basket.y + 45 + Math.sin(angle) * 8;
+                const x2 = basket.x + 40 + Math.cos(angle) * 25;
+                const y2 = basket.y + 65 + Math.sin(angle) * 5;
+                
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+
+        // Рисование игрока
+        function drawPlayer() {
+            // Тень
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(player.x + 30, canvas.height - 25, 25, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ноги
+            ctx.fillStyle = '#000080';
+            ctx.fillRect(player.x + 15, player.y + 50, 12, 25);
+            ctx.fillRect(player.x + 33, player.y + 50, 12, 25);
+            
+            // Кроссовки
+            ctx.fillStyle = 'black';
+            ctx.fillRect(player.x + 12, player.y + 70, 18, 8);
+            ctx.fillRect(player.x + 35, player.y + 70, 18, 8);
+            
+            // Тело
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(player.x + 10, player.y + 25, 40, 30);
+            
+            // Руки
+            ctx.fillStyle = '#DEB887';
+            if (player.hasBall && player.isDribbling) {
+                // Анимация дриблинга
+                const dribbleY = Math.sin(Date.now() * 0.02) * 10;
+                ctx.fillRect(player.x + 5, player.y + 30 + dribbleY, 10, 20);
+                ctx.fillRect(player.x + 45, player.y + 30 - dribbleY, 10, 20);
+            } else {
+                ctx.fillRect(player.x + 5, player.y + 30, 10, 20);
+                ctx.fillRect(player.x + 45, player.y + 30, 10, 20);
+            }
+            
+            // Голова
+            ctx.fillStyle = '#DEB887';
+            ctx.beginPath();
+            ctx.arc(player.x + 30, player.y + 15, 15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Волосы
+            ctx.fillStyle = '#8B4513';
+            ctx.beginPath();
+            ctx.arc(player.x + 30, player.y + 8, 16, Math.PI, Math.PI * 2);
+            ctx.fill();
+            
+            // Глаза
+            ctx.fillStyle = 'white';
+            ctx.fillRect(player.x + 25, player.y + 12, 3, 3);
+            ctx.fillRect(player.x + 32, player.y + 12, 3, 3);
+            ctx.fillStyle = 'black';
+            ctx.fillRect(player.x + 26, player.y + 13, 1, 1);
+            ctx.fillRect(player.x + 33, player.y + 13, 1, 1);
+            
+            // Номер на майке
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('23', player.x + 30, player.y + 45);
+        }
+
+        // Рисование мяча
+        function drawBall() {
+            if (player.hasBall && !player.isDribbling) {
+                ball.x = player.x + 30;
+                ball.y = player.y + 10;
+            } else if (player.hasBall && player.isDribbling) {
+                const dribbleY = Math.sin(Date.now() * 0.02) * 15;
+                ball.x = player.x + 30;
+                ball.y = player.y + 50 + dribbleY;
+            }
+            
+            // Тень мяча
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(ball.x, canvas.height - 25, ball.radius * 0.8, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Основа мяча
+            ctx.fillStyle = '#FF8C00';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Линии мяча
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.moveTo(ball.x - ball.radius, ball.y);
+            ctx.lineTo(ball.x + ball.radius, ball.y);
+            ctx.moveTo(ball.x, ball.y - ball.radius);
+            ctx.lineTo(ball.x, ball.y + ball.radius);
+            
+            // Дуги
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius * 0.7, Math.PI * 0.2, Math.PI * 0.8);
+            ctx.arc(ball.x, ball.y, ball.radius * 0.7, Math.PI * 1.2, Math.PI * 1.8);
+            ctx.stroke();
+        }
+
+        // Обновление физики
+        function updatePhysics() {
+            // Движение игрока
+            if (keys['ArrowLeft'] && player.x > 80) player.x -= 4;
+            if (keys['ArrowRight'] && player.x < canvas.width - 140) player.x += 4;
+            if (keys['ArrowUp'] && player.y > canvas.height - 200) player.y -= 3;
+            if (keys['ArrowDown'] && player.y < canvas.height - 80) player.y += 3;
+            
+            // Физика мяча
+            if (!player.hasBall) {
+                ball.x += ball.velocityX;
+                ball.y += ball.velocityY;
+                ball.velocityY += 0.5; // Гравитация
+                
+                // Проверка попадания в корзину
+                checkBasket();
+                
+                // Отскок от земли
+                if (ball.y + ball.radius > canvas.height - 25) {
+                    if (ball.bounces < ball.maxBounces) {
+                        ball.y = canvas.height - 25 - ball.radius;
+                        ball.velocityY *= -0.7;
+                        ball.velocityX *= 0.8;
+                        ball.bounces++;
+                    } else {
+                        ball.y = canvas.height - 25 - ball.radius;
+                        ball.velocityY = 0;
+                        ball.velocityX *= 0.95;
+                        ball.onGround = true;
+                        
+                        if (Math.abs(ball.velocityX) < 0.1) {
+                            ball.velocityX = 0;
+                        }
+                    }
+                }
+                
+                // Границы экрана
+                if (ball.x - ball.radius < 80 || ball.x + ball.radius > canvas.width - 80) {
+                    ball.velocityX *= -0.5;
+                }
+            }
+        }
+
+        // Основной игровой цикл
+        function gameLoop() {
+            // Очистка canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Рисование
+            drawBackground();
+            drawCourt();
+            drawBasket();
+            drawPlayer();
+            drawBall();
+            
+            // Обновление
+            updatePhysics();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Запуск игры
+        gameLoop();
+        
+        // Адаптация под размер окна
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
