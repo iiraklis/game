@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Select a Game — Powered by AI Games</title>
+  <meta name="description" content="Choose and play mini web games: Ball and Holes, Basketball, Dog Bones, 2D Football, RallyPulse. Made with AI.">
   <style>
     body {
       background-color: #f4f4f4;
@@ -23,19 +24,23 @@
       justify-content: center;
       gap: 30px;
       margin-bottom: 60px;
+      padding: 0 16px;
     }
 
-    .game-card {
+    /* карточка как ссылка */
+    a.game-card {
+      display: block;
       background-color: #fff;
       border-radius: 12px;
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
       width: 220px;
-      cursor: pointer;
       transition: transform 0.2s;
       border: 1px solid #ccc;
+      text-decoration: none;
+      color: inherit;
     }
 
-    .game-card:hover {
+    a.game-card:hover {
       transform: scale(1.05);
     }
 
@@ -45,6 +50,7 @@
       object-fit: cover;
       border-top-left-radius: 12px;
       border-top-right-radius: 12px;
+      display: block;
     }
 
     .game-title {
@@ -57,43 +63,34 @@
 </head>
 <body>
   <h1>Select a Game</h1>
+
   <div class="game-grid">
-    <div class="game-card" onclick="window.location.href='game1/index.html'">
+    <a class="game-card" href="game1/index.html" aria-label="Play Ball and Holes">
       <img src="game1/preview.png" alt="Ball and Holes">
       <div class="game-title">Ball and Holes</div>
-    </div>
+    </a>
 
-      <div class="game-card" onclick="window.location.href='game2/index.html'">
-    <img src="game2/preview.png" alt="Basketball">
-    <div class="game-title">Basketball</div>
-  </div>
+    <a class="game-card" href="game2/index.html" aria-label="Play Basketball">
+      <img src="game2/preview.png" alt="Basketball">
+      <div class="game-title">Basketball</div>
+    </a>
 
+    <a class="game-card" href="game3/index.html" aria-label="Play Dog Bones">
+      <img src="game3/preview.png" alt="Dog Bones">
+      <div class="game-title">Dog Bones</div>
+    </a>
 
-    <div class="game-card" onclick="window.location.href='game3/index.html'">
-  <img src="game3/preview.png" alt="Dog Bones">
-  <div class="game-title">Dog Bones</div>
-</div>
+    <a class="game-card" href="game4/index.html" aria-label="Play 2D Football">
+      <img src="game4/preview.png" alt="2D Football">
+      <div class="game-title">2D Football</div>
+    </a>
 
+    <a class="game-card" href="game5/index.html" aria-label="Play RallyPulse">
+      <img src="game5/preview.png" alt="RallyPulse">
+      <div class="game-title">RallyPulse</div>
+    </a>
 
-
-        <div class="game-card" onclick="window.location.href='game4/index.html'">
-  <img src="game4/preview.png" alt="2D Football">
-  <div class="game-title">2D Football</div>
-</div>
-
-          <div class="game-card" onclick="window.location.href='game5/index.html'">
-  <img src="game5/preview.png" alt="RallyPulse">
-  <div class="game-title">RallyPulse</div>
-</div>  
-    
     <!-- Здесь можно добавить следующие игры -->
-
-    
   </div>
 </body>
 </html>
-
-
-
-
-
