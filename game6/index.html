@@ -1,0 +1,768 @@
+<!-- Copyright (c) 2025 IRAKLI IVANISHVILI Park Ranger Simulation -->
+<!-- All rights reserved. Unauthorized use is prohibited. See LICENSE file for details. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Park Ranger Simulation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #2c5530, #4a7c59);
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #gameCanvas {
+            border: 3px solid #2d4a2d;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            background: linear-gradient(to bottom, #87CEEB, #98FB98);
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            min-width: 200px;
+        }
+
+        #parkHealth {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+
+        #events {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 400px;
+            min-height: 80px;
+        }
+
+        #tutorial {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 600px;
+            z-index: 1000;
+        }
+
+        #tutorial h2 {
+            color: #4CAF50;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        #tutorial p {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+
+        #startButton {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+
+        #startButton:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+
+        .controls {
+            text-align: left;
+            margin: 15px 0;
+        }
+
+        .controls div {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .key {
+            background: #333;
+            color: #4CAF50;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <button onclick="window.location.href='../index.html'" style="position: absolute; top: 20px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ⬅ Main Menu
+  </button>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="1000" height="700"></canvas>
+        
+        <div id="ui">
+            <div id="parkHealth">Park Health: 100</div>
+            <div>Time: <span id="gameTime">06:00</span></div>
+            <div>Season: <span id="season">Spring</span></div>
+            <div>Weather: <span id="weather">Clear</span></div>
+            <div>Trees: <span id="treeCount">15</span></div>
+            <div>Animals: <span id="animalCount">8</span></div>
+        </div>
+
+        <div id="events">
+            <div style="font-weight: bold; margin-bottom: 5px;">Recent Events:</div>
+            <div id="eventLog">Welcome to the nature reserve!</div>
+        </div>
+
+        <div id="tutorial">
+            <h2>🌲 Welcome, Park Ranger! 🦌</h2>
+            <p>Your mission is to maintain and improve this beautiful nature reserve. Keep the Park Health score high by responding to challenges and caring for the ecosystem.</p>
+            
+            <div class="controls">
+                <div><span class="key">Arrow Keys</span> - Move your ranger around the park</div>
+                <div><span class="key">Spacebar</span> - Interact with nearby objects</div>
+                <div><span class="key">1</span> - Plant new trees ($20)</div>
+                <div><span class="key">2</span> - Feed animals ($10)</div>
+                <div><span class="key">3</span> - Clean up litter ($5)</div>
+                <div><span class="key">4</span> - Repair damaged areas ($15)</div>
+                <div><span class="key">5</span> - Observe wildlife (free)</div>
+            </div>
+
+            <p>Watch for random events like storms, sick animals, or visitor litter. React quickly to keep your park thriving!</p>
+            <button id="startButton">Start Your Adventure!</button>
+        </div>
+    </div>
+
+    <script>
+        class ParkRangerGame {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.tutorial = document.getElementById('tutorial');
+                
+                // Game state
+                this.parkHealth = 100;
+                this.money = 100;
+                this.gameTime = 6 * 60; // 6:00 AM in minutes
+                this.season = 0; // 0: Spring, 1: Summer, 2: Autumn, 3: Winter
+                this.weather = 'Clear';
+                this.dayPhase = 0; // 0-1 for day/night cycle
+                
+                // Player
+                this.player = {
+                    x: 500,
+                    y: 350,
+                    size: 20,
+                    speed: 3
+                };
+                
+                // Game objects
+                this.trees = [];
+                this.animals = [];
+                this.litter = [];
+                this.interactables = [];
+                this.particles = [];
+                
+                // Input
+                this.keys = {};
+                this.lastInteraction = 0;
+                
+                // Events
+                this.eventTimer = 0;
+                this.events = [];
+                
+                this.setupEventListeners();
+                this.initializeGameObjects();
+                this.gameLoop();
+            }
+
+            setupEventListeners() {
+                document.getElementById('startButton').addEventListener('click', () => {
+                    this.tutorial.style.display = 'none';
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    this.keys[e.key] = true;
+                    this.handleKeyPress(e.key);
+                });
+
+                document.addEventListener('keyup', (e) => {
+                    this.keys[e.key] = false;
+                });
+            }
+
+            handleKeyPress(key) {
+                const now = Date.now();
+                if (now - this.lastInteraction < 200) return;
+
+                switch(key) {
+                    case '1':
+                        this.plantTree();
+                        break;
+                    case '2':
+                        this.feedAnimals();
+                        break;
+                    case '3':
+                        this.cleanLitter();
+                        break;
+                    case '4':
+                        this.repairArea();
+                        break;
+                    case '5':
+                        this.observeWildlife();
+                        break;
+                    case ' ':
+                        this.interact();
+                        break;
+                }
+                this.lastInteraction = now;
+            }
+
+            initializeGameObjects() {
+                // Create initial trees
+                for (let i = 0; i < 15; i++) {
+                    this.trees.push({
+                        x: Math.random() * (this.canvas.width - 60) + 30,
+                        y: Math.random() * (this.canvas.height - 60) + 30,
+                        type: Math.random() > 0.5 ? 'oak' : 'pine',
+                        health: 100,
+                        age: Math.random() * 5 + 1
+                    });
+                }
+
+                // Create initial animals
+                for (let i = 0; i < 8; i++) {
+                    this.animals.push({
+                        x: Math.random() * (this.canvas.width - 40) + 20,
+                        y: Math.random() * (this.canvas.height - 40) + 20,
+                        type: Math.random() > 0.5 ? 'deer' : 'bird',
+                        health: 100,
+                        direction: Math.random() * Math.PI * 2,
+                        speed: 0.5 + Math.random() * 0.5,
+                        happiness: 100
+                    });
+                }
+
+                // Add some initial litter
+                for (let i = 0; i < 5; i++) {
+                    this.litter.push({
+                        x: Math.random() * (this.canvas.width - 20) + 10,
+                        y: Math.random() * (this.canvas.height - 20) + 10,
+                        type: Math.random() > 0.5 ? 'bottle' : 'wrapper'
+                    });
+                }
+            }
+
+            update() {
+                this.updatePlayer();
+                this.updateAnimals();
+                this.updateTime();
+                this.updateEvents();
+                this.updateParticles();
+                this.calculateParkHealth();
+            }
+
+            updatePlayer() {
+                if (this.keys['ArrowUp'] && this.player.y > 10) {
+                    this.player.y -= this.player.speed;
+                }
+                if (this.keys['ArrowDown'] && this.player.y < this.canvas.height - 30) {
+                    this.player.y += this.player.speed;
+                }
+                if (this.keys['ArrowLeft'] && this.player.x > 10) {
+                    this.player.x -= this.player.speed;
+                }
+                if (this.keys['ArrowRight'] && this.player.x < this.canvas.width - 30) {
+                    this.player.x += this.player.speed;
+                }
+            }
+
+            updateAnimals() {
+                this.animals.forEach(animal => {
+                    // Simple AI movement
+                    animal.x += Math.cos(animal.direction) * animal.speed;
+                    animal.y += Math.sin(animal.direction) * animal.speed;
+                    
+                    // Boundary checking
+                    if (animal.x < 20 || animal.x > this.canvas.width - 20 || 
+                        animal.y < 20 || animal.y > this.canvas.height - 20) {
+                        animal.direction += Math.PI;
+                    }
+                    
+                    // Random direction changes
+                    if (Math.random() < 0.02) {
+                        animal.direction += (Math.random() - 0.5) * 0.5;
+                    }
+                });
+            }
+
+            updateTime() {
+                this.gameTime += 0.5;
+                if (this.gameTime >= 24 * 60) {
+                    this.gameTime = 0;
+                    // New day - might change season
+                    if (Math.random() < 0.05) {
+                        this.season = (this.season + 1) % 4;
+                    }
+                }
+                
+                // Update day/night cycle
+                const hour = Math.floor(this.gameTime / 60);
+                if (hour >= 6 && hour < 18) {
+                    this.dayPhase = Math.min(1, (hour - 6) / 6);
+                } else {
+                    this.dayPhase = Math.max(0, 1 - ((hour >= 18 ? hour - 18 : hour + 6) / 6));
+                }
+            }
+
+            updateEvents() {
+                this.eventTimer++;
+                
+                // Random events
+                if (this.eventTimer > 300 + Math.random() * 600) {
+                    this.triggerRandomEvent();
+                    this.eventTimer = 0;
+                }
+
+                // Weather changes
+                if (Math.random() < 0.005) {
+                    const weathers = ['Clear', 'Cloudy', 'Rainy', 'Stormy'];
+                    this.weather = weathers[Math.floor(Math.random() * weathers.length)];
+                }
+            }
+
+            updateParticles() {
+                this.particles = this.particles.filter(particle => {
+                    particle.y += particle.speed;
+                    particle.life--;
+                    return particle.life > 0;
+                });
+
+                // Add rain particles if rainy
+                if (this.weather === 'Rainy' || this.weather === 'Stormy') {
+                    for (let i = 0; i < 3; i++) {
+                        this.particles.push({
+                            x: Math.random() * this.canvas.width,
+                            y: -10,
+                            speed: 3 + Math.random() * 3,
+                            life: 100,
+                            type: 'rain'
+                        });
+                    }
+                }
+            }
+
+            triggerRandomEvent() {
+                const events = [
+                    {
+                        message: "A storm damaged several trees!",
+                        effect: () => {
+                            this.trees.forEach(tree => {
+                                if (Math.random() < 0.3) tree.health -= 20;
+                            });
+                        }
+                    },
+                    {
+                        message: "Visitors left litter throughout the park!",
+                        effect: () => {
+                            for (let i = 0; i < 3; i++) {
+                                this.litter.push({
+                                    x: Math.random() * (this.canvas.width - 20) + 10,
+                                    y: Math.random() * (this.canvas.height - 20) + 10,
+                                    type: Math.random() > 0.5 ? 'bottle' : 'wrapper'
+                                });
+                            }
+                        }
+                    },
+                    {
+                        message: "Some animals appear to be sick!",
+                        effect: () => {
+                            this.animals.forEach(animal => {
+                                if (Math.random() < 0.4) animal.health -= 15;
+                            });
+                        }
+                    },
+                    {
+                        message: "A group of nature enthusiasts donated money!",
+                        effect: () => {
+                            this.money += 50;
+                        }
+                    }
+                ];
+
+                const event = events[Math.floor(Math.random() * events.length)];
+                event.effect();
+                this.addEvent(event.message);
+            }
+
+            plantTree() {
+                if (this.money >= 20) {
+                    this.trees.push({
+                        x: this.player.x + (Math.random() - 0.5) * 100,
+                        y: this.player.y + (Math.random() - 0.5) * 100,
+                        type: Math.random() > 0.5 ? 'oak' : 'pine',
+                        health: 100,
+                        age: 0.1
+                    });
+                    this.money -= 20;
+                    this.addEvent("Planted a new tree!");
+                }
+            }
+
+            feedAnimals() {
+                if (this.money >= 10) {
+                    this.animals.forEach(animal => {
+                        const distance = Math.hypot(animal.x - this.player.x, animal.y - this.player.y);
+                        if (distance < 100) {
+                            animal.health = Math.min(100, animal.health + 15);
+                            animal.happiness = Math.min(100, animal.happiness + 10);
+                        }
+                    });
+                    this.money -= 10;
+                    this.addEvent("Fed nearby animals!");
+                }
+            }
+
+            cleanLitter() {
+                let cleaned = 0;
+                this.litter = this.litter.filter(trash => {
+                    const distance = Math.hypot(trash.x - this.player.x, trash.y - this.player.y);
+                    if (distance < 50 && cleaned < 3) {
+                        cleaned++;
+                        return false;
+                    }
+                    return true;
+                });
+                
+                if (cleaned > 0) {
+                    this.money = Math.max(0, this.money - 5);
+                    this.addEvent(`Cleaned ${cleaned} piece${cleaned > 1 ? 's' : ''} of litter!`);
+                }
+            }
+
+            repairArea() {
+                if (this.money >= 15) {
+                    this.trees.forEach(tree => {
+                        const distance = Math.hypot(tree.x - this.player.x, tree.y - this.player.y);
+                        if (distance < 80) {
+                            tree.health = Math.min(100, tree.health + 25);
+                        }
+                    });
+                    this.money -= 15;
+                    this.addEvent("Repaired damaged trees nearby!");
+                }
+            }
+
+            observeWildlife() {
+                let observed = 0;
+                this.animals.forEach(animal => {
+                    const distance = Math.hypot(animal.x - this.player.x, animal.y - this.player.y);
+                    if (distance < 80) observed++;
+                });
+                
+                if (observed > 0) {
+                    this.addEvent(`Observed ${observed} animal${observed > 1 ? 's' : ''}. Knowledge gained!`);
+                    // Small park health bonus for observation
+                    this.parkHealth = Math.min(100, this.parkHealth + 1);
+                }
+            }
+
+            interact() {
+                // Check for nearby interactable objects
+                let interacted = false;
+                
+                this.trees.forEach(tree => {
+                    const distance = Math.hypot(tree.x - this.player.x, tree.y - this.player.y);
+                    if (distance < 40) {
+                        this.addEvent(`This ${tree.type} tree is ${tree.health > 80 ? 'healthy' : tree.health > 50 ? 'needs care' : 'in poor condition'}.`);
+                        interacted = true;
+                    }
+                });
+                
+                if (!interacted) {
+                    this.addEvent("Nothing to interact with nearby.");
+                }
+            }
+
+            calculateParkHealth() {
+                let health = 0;
+                
+                // Tree health contribution
+                const treeHealth = this.trees.reduce((sum, tree) => sum + tree.health, 0) / this.trees.length;
+                health += treeHealth * 0.4;
+                
+                // Animal health contribution
+                const animalHealth = this.animals.reduce((sum, animal) => sum + animal.health, 0) / this.animals.length;
+                health += animalHealth * 0.3;
+                
+                // Litter penalty
+                health -= this.litter.length * 5;
+                
+                // Weather bonus/penalty
+                if (this.weather === 'Clear') health += 5;
+                else if (this.weather === 'Stormy') health -= 10;
+                
+                this.parkHealth = Math.max(0, Math.min(100, health + 25));
+            }
+
+            addEvent(message) {
+                const eventLog = document.getElementById('eventLog');
+                eventLog.textContent = message;
+            }
+
+            draw() {
+                // Clear canvas with sky gradient
+                const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+                const skyColor = this.getSkyColor();
+                gradient.addColorStop(0, skyColor.top);
+                gradient.addColorStop(1, skyColor.bottom);
+                this.ctx.fillStyle = gradient;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Draw particles (rain, etc.)
+                this.drawParticles();
+                
+                // Draw trees
+                this.drawTrees();
+                
+                // Draw animals
+                this.drawAnimals();
+                
+                // Draw litter
+                this.drawLitter();
+                
+                // Draw player
+                this.drawPlayer();
+                
+                // Update UI
+                this.updateUI();
+            }
+
+            getSkyColor() {
+                const seasons = [
+                    { top: '#87CEEB', bottom: '#98FB98' }, // Spring
+                    { top: '#87CEEB', bottom: '#90EE90' }, // Summer  
+                    { top: '#FFA500', bottom: '#FFD700' }, // Autumn
+                    { top: '#B0C4DE', bottom: '#F0F8FF' }  // Winter
+                ];
+                
+                const seasonColor = seasons[this.season];
+                const nightDarkness = 1 - this.dayPhase;
+                
+                return {
+                    top: this.blendColors(seasonColor.top, '#1a1a2e', nightDarkness * 0.7),
+                    bottom: this.blendColors(seasonColor.bottom, '#16213e', nightDarkness * 0.5)
+                };
+            }
+
+            blendColors(color1, color2, ratio) {
+                // Simple color blending
+                const c1 = this.hexToRgb(color1);
+                const c2 = this.hexToRgb(color2);
+                const r = Math.round(c1.r * (1 - ratio) + c2.r * ratio);
+                const g = Math.round(c1.g * (1 - ratio) + c2.g * ratio);
+                const b = Math.round(c1.b * (1 - ratio) + c2.b * ratio);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+
+            hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : { r: 0, g: 0, b: 0 };
+            }
+
+            drawParticles() {
+                this.particles.forEach(particle => {
+                    if (particle.type === 'rain') {
+                        this.ctx.strokeStyle = 'rgba(100, 149, 237, 0.6)';
+                        this.ctx.lineWidth = 1;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(particle.x, particle.y);
+                        this.ctx.lineTo(particle.x, particle.y + 10);
+                        this.ctx.stroke();
+                    }
+                });
+            }
+
+            drawTrees() {
+                this.trees.forEach(tree => {
+                    const healthColor = tree.health > 70 ? '#228B22' : tree.health > 40 ? '#32CD32' : '#9ACD32';
+                    
+                    // Draw trunk
+                    this.ctx.fillStyle = '#8B4513';
+                    this.ctx.fillRect(tree.x - 3, tree.y + 15, 6, 15);
+                    
+                    // Draw canopy
+                    this.ctx.fillStyle = healthColor;
+                    if (tree.type === 'oak') {
+                        this.ctx.beginPath();
+                        this.ctx.arc(tree.x, tree.y, 15, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    } else {
+                        // Pine tree
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(tree.x, tree.y - 15);
+                        this.ctx.lineTo(tree.x - 12, tree.y + 10);
+                        this.ctx.lineTo(tree.x + 12, tree.y + 10);
+                        this.ctx.closePath();
+                        this.ctx.fill();
+                    }
+                    
+                    // Health indicator
+                    if (tree.health < 70) {
+                        this.ctx.fillStyle = 'red';
+                        this.ctx.fillRect(tree.x - 8, tree.y - 25, 16, 3);
+                        this.ctx.fillStyle = 'green';
+                        this.ctx.fillRect(tree.x - 8, tree.y - 25, (tree.health / 100) * 16, 3);
+                    }
+                });
+            }
+
+            drawAnimals() {
+                this.animals.forEach(animal => {
+                    if (animal.type === 'deer') {
+                        // Draw deer body
+                        this.ctx.fillStyle = '#8B4513';
+                        this.ctx.fillRect(animal.x - 8, animal.y - 5, 16, 10);
+                        
+                        // Draw head
+                        this.ctx.fillRect(animal.x - 12, animal.y - 8, 8, 6);
+                        
+                        // Draw antlers
+                        this.ctx.strokeStyle = '#8B4513';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(animal.x - 10, animal.y - 8);
+                        this.ctx.lineTo(animal.x - 12, animal.y - 12);
+                        this.ctx.moveTo(animal.x - 8, animal.y - 8);
+                        this.ctx.lineTo(animal.x - 6, animal.y - 12);
+                        this.ctx.stroke();
+                    } else {
+                        // Draw bird
+                        this.ctx.fillStyle = '#FF4500';
+                        this.ctx.beginPath();
+                        this.ctx.arc(animal.x, animal.y, 6, 0, Math.PI * 2);
+                        this.ctx.fill();
+                        
+                        // Wing
+                        this.ctx.fillStyle = '#FF6347';
+                        this.ctx.fillRect(animal.x - 4, animal.y - 2, 8, 4);
+                    }
+                    
+                    // Health indicator
+                    if (animal.health < 70) {
+                        this.ctx.fillStyle = 'red';
+                        this.ctx.fillRect(animal.x - 8, animal.y - 15, 16, 2);
+                        this.ctx.fillStyle = 'green';
+                        this.ctx.fillRect(animal.x - 8, animal.y - 15, (animal.health / 100) * 16, 2);
+                    }
+                });
+            }
+
+            drawLitter() {
+                this.litter.forEach(trash => {
+                    if (trash.type === 'bottle') {
+                        this.ctx.fillStyle = '#87CEEB';
+                        this.ctx.fillRect(trash.x, trash.y, 8, 12);
+                        this.ctx.fillStyle = '#4169E1';
+                        this.ctx.fillRect(trash.x, trash.y, 8, 3);
+                    } else {
+                        this.ctx.fillStyle = '#FFD700';
+                        this.ctx.fillRect(trash.x, trash.y, 12, 8);
+                        this.ctx.fillStyle = '#FFA500';
+                        this.ctx.fillRect(trash.x + 2, trash.y + 2, 8, 4);
+                    }
+                });
+            }
+
+            drawPlayer() {
+                // Draw ranger body
+                this.ctx.fillStyle = '#8B4513';
+                this.ctx.fillRect(this.player.x - 6, this.player.y, 12, 16);
+                
+                // Draw ranger head
+                this.ctx.fillStyle = '#FFDBAC';
+                this.ctx.beginPath();
+                this.ctx.arc(this.player.x, this.player.y - 2, 8, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Draw ranger hat
+                this.ctx.fillStyle = '#228B22';
+                this.ctx.fillRect(this.player.x - 10, this.player.y - 8, 20, 4);
+                this.ctx.fillRect(this.player.x - 6, this.player.y - 12, 12, 6);
+                
+                // Draw badge
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.beginPath();
+                this.ctx.arc(this.player.x - 3, this.player.y + 4, 3, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+
+            updateUI() {
+                document.getElementById('parkHealth').textContent = `Park Health: ${Math.round(this.parkHealth)}`;
+                
+                const hour = Math.floor(this.gameTime / 60);
+                const minute = Math.floor(this.gameTime % 60);
+                document.getElementById('gameTime').textContent = 
+                    `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                
+                const seasons = ['Spring', 'Summer', 'Autumn', 'Winter'];
+                document.getElementById('season').textContent = seasons[this.season];
+                document.getElementById('weather').textContent = this.weather;
+                document.getElementById('treeCount').textContent = this.trees.length;
+                document.getElementById('animalCount').textContent = this.animals.length;
+            }
+
+            gameLoop() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+
+        // Start the game when page loads
+        window.addEventListener('load', () => {
+            new ParkRangerGame();
+        });
+    </script>
+</body>
+</html>
