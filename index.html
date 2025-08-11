@@ -3,8 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
   <title>Select a Game — Powered by AI Games</title>
   <meta name="description" content="Choose and play mini web games: Ball and Holes, Basketball, Dog Bones, 2D Football, RallyPulse. Made with AI.">
+  <meta name="keywords" content="AI Games, browser games, free games, basketball game, football game, rally game, dog bones, online games">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://ai-games.gr/">
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:title" content="AI Games — Play Free Browser Games">
+  <meta property="og:description" content="Play mini web games: Ball and Holes, Basketball, Dog Bones, 2D Football, RallyPulse.">
+  <meta property="og:url" content="https://ai-games.gr/">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://ai-games.gr/preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+
   <style>
     body {
       background-color: #f4f4f4;
@@ -14,9 +27,7 @@
       padding: 0;
     }
 
-    h1 {
-      padding: 30px 0;
-    }
+    h1 { padding: 30px 0; }
 
     .game-grid {
       display: flex;
@@ -39,10 +50,7 @@
       text-decoration: none;
       color: inherit;
     }
-
-    a.game-card:hover {
-      transform: scale(1.05);
-    }
+    a.game-card:hover { transform: scale(1.05); }
 
     .game-card img {
       width: 100%;
@@ -59,73 +67,96 @@
       font-weight: bold;
       color: #333;
     }
+
+    /* footer */
+    .site-footer{
+      margin-top:40px;background:#0f1115;color:#cfd3dc;
+      border-top:1px solid #1c2230
+    }
+    .footer-inner{
+      max-width:1100px;margin:0 auto;padding:24px 16px;
+      display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between
+    }
+    .foot-copy{margin:0;font-size:14px}
+    .foot-nav{display:flex;gap:10px;flex-wrap:wrap;font-size:14px}
+    .foot-nav a{color:#cfd3dc;text-decoration:none}
+    .foot-nav a:hover,.foot-nav a:focus{color:#fff;text-decoration:underline}
   </style>
 </head>
+
 <body>
   <h1>Select a Game</h1>
 
-  <div class="game-grid">
-    <a class="game-card" href="game1/index.html" aria-label="Play Ball and Holes">
+  <div class="game-grid" id="games">
+    <a class="game-card" href="game1/index.html" aria-label="Play Ball and Holes" data-name="Ball and Holes">
       <img src="game1/preview.png" alt="Ball and Holes">
       <div class="game-title">Ball and Holes</div>
     </a>
 
-    <a class="game-card" href="game2/index.html" aria-label="Play Basketball">
+    <a class="game-card" href="game2/index.html" aria-label="Play Basketball" data-name="Basketball">
       <img src="game2/preview.png" alt="Basketball">
       <div class="game-title">Basketball</div>
     </a>
 
-    <a class="game-card" href="game3/index.html" aria-label="Play Dog Bones">
+    <a class="game-card" href="game3/index.html" aria-label="Play Dog Bones" data-name="Dog Bones">
       <img src="game3/preview.png" alt="Dog Bones">
       <div class="game-title">Dog Bones</div>
     </a>
 
-    <a class="game-card" href="game4/index.html" aria-label="Play 2D Football">
+    <a class="game-card" href="game4/index.html" aria-label="Play 2D Football" data-name="2D Football">
       <img src="game4/preview.png" alt="2D Football">
       <div class="game-title">2D Football</div>
     </a>
 
-    <a class="game-card" href="game5/index.html" aria-label="Play RallyPulse">
+    <a class="game-card" href="game5/index.html" aria-label="Play RallyPulse" data-name="RallyPulse">
       <img src="game5/preview.png" alt="RallyPulse">
       <div class="game-title">RallyPulse</div>
     </a>
 
-    <!-- Здесь можно добавить следующие игры -->
+    <!-- Просто добавляй сюда следующие игры тем же шаблоном.
+         JSON-LD ниже подхватит их автоматически. -->
   </div>
-</body>
+
+  <!-- footer ВНУТРИ body -->
   <footer class="site-footer" role="contentinfo">
-  <div class="footer-inner">
-    <p class="foot-copy">© <span id="year"></span> AI Games. All rights reserved.</p>
-    <nav class="foot-nav" aria-label="Legal">
-      <a href="/legal/privacy.html">Privacy Policy</a>
-      <span aria-hidden="true">•</span>
-      <a href="/legal/cookies.html">Cookie Policy</a>
-      <span aria-hidden="true">•</span>
-      <a href="/legal/terms.html">Terms of Use</a>
-      <span aria-hidden="true">•</span>
-      <a href="mailto:info@ai-games.gr">info@ai-games.gr</a>
-    </nav>
-  </div>
-</footer>
+    <div class="footer-inner">
+      <p class="foot-copy">© <span id="year"></span> AI Games. All rights reserved.</p>
+      <nav class="foot-nav" aria-label="Legal">
+        <a href="/legal/privacy.html">Privacy Policy</a>
+        <span aria-hidden="true">•</span>
+        <a href="/legal/cookies.html">Cookie Policy</a>
+        <span aria-hidden="true">•</span>
+        <a href="/legal/terms.html">Terms of Use</a>
+        <span aria-hidden="true">•</span>
+        <a href="mailto:info@ai-games.gr">info@ai-games.gr</a>
+      </nav>
+    </div>
+  </footer>
 
-<script>
-  document.getElementById('year').textContent = new Date().getFullYear();
-</script>
+  <script>
+    // Год в футере
+    document.getElementById('year').textContent = new Date().getFullYear();
 
-<style>
-  .site-footer{
-    margin-top:40px;background:#0f1115;color:#cfd3dc;
-    border-top:1px solid #1c2230
-  }
-  .footer-inner{
-    max-width:1100px;margin:0 auto;padding:24px 16px;
-    display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between
-  }
-  .foot-copy{margin:0;font-size:14px}
-  .foot-nav{display:flex;gap:10px;flex-wrap:wrap;font-size:14px}
-  .foot-nav a{color:#cfd3dc;text-decoration:none}
-  .foot-nav a:hover,.foot-nav a:focus{color:#fff;text-decoration:underline}
-</style>
-
+    // Автоматический JSON-LD (ItemList) из карточек игр
+    (function () {
+      const cards = Array.from(document.querySelectorAll('.game-card'));
+      const itemList = {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": "AI Games — Game List",
+        "url": "https://ai-games.gr/",
+        "itemListElement": cards.map((a, idx) => ({
+          "@type": "ListItem",
+          "position": idx + 1,
+          "url": new URL(a.getAttribute('href'), location.origin).toString(),
+          "name": a.getAttribute('data-name') || a.textContent.trim()
+        }))
+      };
+      const s = document.createElement('script');
+      s.type = 'application/ld+json';
+      s.textContent = JSON.stringify(itemList);
+      document.head.appendChild(s);
+    })();
+  </script>
+</body>
 </html>
-
