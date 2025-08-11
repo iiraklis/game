@@ -1,0 +1,614 @@
+<!-- Copyright (c) 2025 IRAKLI IVANISHVILI Aurora Drift - Neon River Challenge -->
+<!-- All rights reserved. Unauthorized use is prohibited. See LICENSE file for details. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aurora Drift - Neon River Challenge</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        canvas {
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+        #gameContainer {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+
+      <button onclick="window.location.href='../index.html'" style="position: absolute; top: 20px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ⬅ Main Menu
+  </button>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <script>
+        // Game Canvas and Context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game State
+        let gameState = 'start'; // 'start', 'playing', 'gameOver'
+        let score = 0;
+        let gameSpeed = 2;
+        let maxSpeed = 8;
+        
+        // Player Boat
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 80,
+            width: 30,
+            height: 50,
+            velocity: 0,
+            maxVelocity: 5,
+            friction: 0.85,
+            acceleration: 0.3
+        };
+        
+        // Game Objects Arrays
+        let obstacles = [];
+        let collectibles = [];
+        let particles = [];
+        let waterParticles = [];
+        let trailParticles = [];
+        
+        // River properties
+        let riverOffset = 0;
+        let riverCurveOffset = 0;
+        
+        // Aurora animation
+        let auroraTime = 0;
+        
+        // Input handling
+        const keys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            if (e.code === 'Space' && gameState === 'start') {
+                startGame();
+                e.preventDefault();
+            }
+            if (e.code === 'KeyR' && gameState === 'gameOver') {
+                resetGame();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Utility functions
+        function random(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+        
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+        
+        // Particle System
+        class Particle {
+            constructor(x, y, vx, vy, color, life, size) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.color = color;
+                this.life = life;
+                this.maxLife = life;
+                this.size = size;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                this.vy += 0.1; // gravity
+            }
+            
+            draw() {
+                const alpha = this.life / this.maxLife;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+            
+            isDead() {
+                return this.life <= 0;
+            }
+        }
+        
+        // Obstacle Class
+        class Obstacle {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type; // 'rock', 'log', 'whirlpool'
+                this.width = 40;
+                this.height = 40;
+                this.rotation = random(0, Math.PI * 2);
+                this.rotationSpeed = random(-0.05, 0.05);
+                
+                if (type === 'whirlpool') {
+                    this.width = 60;
+                    this.height = 60;
+                    this.rotationSpeed = 0.1;
+                }
+            }
+            
+            update() {
+                this.y += gameSpeed;
+                this.rotation += this.rotationSpeed;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                if (this.type === 'rock') {
+                    // Draw rock with neon outline
+                    ctx.fillStyle = '#333';
+                    ctx.strokeStyle = '#888';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    
+                    // Neon glow
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = 0.5;
+                    ctx.stroke();
+                    
+                } else if (this.type === 'log') {
+                    // Draw log
+                    ctx.fillStyle = '#8B4513';
+                    ctx.strokeStyle = '#A0522D';
+                    ctx.lineWidth = 2;
+                    ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+                    ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
+                    
+                    // Neon outline
+                    ctx.strokeStyle = '#ff6600';
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = 0.5;
+                    ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
+                    
+                } else if (this.type === 'whirlpool') {
+                    // Draw whirlpool with spiral effect
+                    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.width / 2);
+                    gradient.addColorStop(0, 'rgba(0, 100, 200, 0.8)');
+                    gradient.addColorStop(0.5, 'rgba(0, 150, 255, 0.6)');
+                    gradient.addColorStop(1, 'rgba(0, 200, 255, 0.2)');
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Spiral lines
+                    ctx.strokeStyle = '#00ccff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    for (let i = 0; i < 3; i++) {
+                        const angle = this.rotation + (i * Math.PI * 2 / 3);
+                        const x = Math.cos(angle) * (this.width / 4);
+                        const y = Math.sin(angle) * (this.width / 4);
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(-x, -y);
+                    }
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+            
+            isOffScreen() {
+                return this.y > canvas.height + 50;
+            }
+            
+            collidesWith(obj) {
+                return distance(this.x, this.y, obj.x, obj.y) < (this.width / 2 + obj.width / 2);
+            }
+        }
+        
+        // Collectible Class
+        class Collectible {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 20;
+                this.height = 20;
+                this.pulseTime = 0;
+                this.floatOffset = random(0, Math.PI * 2);
+            }
+            
+            update() {
+                this.y += gameSpeed;
+                this.pulseTime += 0.1;
+                this.floatOffset += 0.05;
+            }
+            
+            draw() {
+                const pulse = Math.sin(this.pulseTime) * 0.3 + 1;
+                const floatY = Math.sin(this.floatOffset) * 3;
+                
+                ctx.save();
+                ctx.translate(this.x, this.y + floatY);
+                
+                // Outer glow
+                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 25 * pulse);
+                gradient.addColorStop(0, 'rgba(255, 255, 0, 0.8)');
+                gradient.addColorStop(0.5, 'rgba(255, 255, 0, 0.4)');
+                gradient.addColorStop(1, 'rgba(255, 255, 0, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, 25 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Core orb
+                ctx.fillStyle = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(0, 0, 8 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+            
+            isOffScreen() {
+                return this.y > canvas.height + 50;
+            }
+            
+            collidesWith(obj) {
+                return distance(this.x, this.y, obj.x, obj.y) < (this.width / 2 + obj.width / 2);
+            }
+        }
+        
+        // Game Functions
+        function startGame() {
+            gameState = 'playing';
+            score = 0;
+            gameSpeed = 2;
+            player.x = canvas.width / 2;
+            player.velocity = 0;
+            obstacles = [];
+            collectibles = [];
+            particles = [];
+            trailParticles = [];
+        }
+        
+        function resetGame() {
+            gameState = 'start';
+            score = 0;
+            gameSpeed = 2;
+            player.x = canvas.width / 2;
+            player.velocity = 0;
+            obstacles = [];
+            collectibles = [];
+            particles = [];
+            trailParticles = [];
+        }
+        
+        function spawnObstacle() {
+            if (Math.random() < 0.02) {
+                const types = ['rock', 'log', 'whirlpool'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                const x = random(100, canvas.width - 100);
+                obstacles.push(new Obstacle(x, -50, type));
+            }
+        }
+        
+        function spawnCollectible() {
+            if (Math.random() < 0.015) {
+                const x = random(50, canvas.width - 50);
+                collectibles.push(new Collectible(x, -30));
+            }
+        }
+        
+        function createSplash(x, y, color) {
+            for (let i = 0; i < 8; i++) {
+                const angle = (Math.PI * 2 / 8) * i;
+                const speed = random(2, 6);
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed - 2;
+                particles.push(new Particle(x, y, vx, vy, color, 30, random(3, 6)));
+            }
+        }
+        
+        function updatePlayer() {
+            // Handle input
+            if (keys['ArrowLeft'] || keys['KeyA']) {
+                player.velocity -= player.acceleration;
+            }
+            if (keys['ArrowRight'] || keys['KeyD']) {
+                player.velocity += player.acceleration;
+            }
+            
+            // Apply friction and limits
+            player.velocity *= player.friction;
+            player.velocity = Math.max(-player.maxVelocity, Math.min(player.maxVelocity, player.velocity));
+            
+            // Update position
+            player.x += player.velocity;
+            player.x = Math.max(player.width / 2, Math.min(canvas.width - player.width / 2, player.x));
+            
+            // Add trail particles
+            if (Math.random() < 0.3) {
+                trailParticles.push(new Particle(
+                    player.x + random(-5, 5),
+                    player.y + 25,
+                    random(-1, 1),
+                    random(1, 3),
+                    '#00ffff',
+                    20,
+                    random(2, 4)
+                ));
+            }
+        }
+        
+        function checkCollisions() {
+            // Check obstacle collisions
+            for (let obstacle of obstacles) {
+                if (obstacle.collidesWith(player)) {
+                    gameState = 'gameOver';
+                    createSplash(player.x, player.y, '#ff0000');
+                    return;
+                }
+            }
+            
+            // Check collectible collisions
+            for (let i = collectibles.length - 1; i >= 0; i--) {
+                if (collectibles[i].collidesWith(player)) {
+                    score += 10;
+                    createSplash(collectibles[i].x, collectibles[i].y, '#ffff00');
+                    collectibles.splice(i, 1);
+                }
+            }
+        }
+        
+        function drawBackground() {
+            // Sky gradient with aurora
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            
+            // Aurora colors that shift over time
+            const auroraR = Math.sin(auroraTime * 0.01) * 50 + 50;
+            const auroraG = Math.sin(auroraTime * 0.015) * 100 + 100;
+            const auroraB = Math.sin(auroraTime * 0.008) * 80 + 150;
+            
+            gradient.addColorStop(0, `rgb(${auroraR}, ${auroraG}, ${auroraB})`);
+            gradient.addColorStop(0.3, 'rgba(20, 40, 80, 0.8)');
+            gradient.addColorStop(1, 'rgba(0, 20, 40, 1)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Aurora bands
+            ctx.save();
+            ctx.globalAlpha = 0.3;
+            for (let i = 0; i < 3; i++) {
+                const waveOffset = Math.sin(auroraTime * 0.005 + i) * 50;
+                const gradient2 = ctx.createLinearGradient(0, 0, 0, 150);
+                gradient2.addColorStop(0, `rgba(${100 + i * 50}, ${200 - i * 30}, ${255 - i * 40}, 0.5)`);
+                gradient2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                
+                ctx.fillStyle = gradient2;
+                ctx.fillRect(waveOffset, i * 40, canvas.width, 60);
+            }
+            ctx.restore();
+        }
+        
+        function drawRiver() {
+            // River water with animated texture
+            riverOffset += gameSpeed * 2;
+            riverCurveOffset += 0.02;
+            
+            const riverWidth = 600;
+            const riverLeft = (canvas.width - riverWidth) / 2;
+            const riverRight = riverLeft + riverWidth;
+            
+            // Water gradient
+            const waterGradient = ctx.createLinearGradient(riverLeft, 0, riverRight, 0);
+            waterGradient.addColorStop(0, 'rgba(0, 50, 100, 0.8)');
+            waterGradient.addColorStop(0.5, 'rgba(0, 80, 150, 0.9)');
+            waterGradient.addColorStop(1, 'rgba(0, 50, 100, 0.8)');
+            
+            ctx.fillStyle = waterGradient;
+            ctx.fillRect(riverLeft, 0, riverWidth, canvas.height);
+            
+            // Water flow lines
+            ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
+            ctx.lineWidth = 2;
+            
+            for (let y = -50; y < canvas.height + 50; y += 30) {
+                const waveY = y + (riverOffset % 60) - 30;
+                const curve = Math.sin(riverCurveOffset + y * 0.01) * 20;
+                
+                ctx.beginPath();
+                ctx.moveTo(riverLeft + 50 + curve, waveY);
+                ctx.lineTo(riverRight - 50 + curve, waveY);
+                ctx.stroke();
+            }
+            
+            // River banks
+            ctx.fillStyle = 'rgba(40, 80, 40, 0.9)';
+            ctx.fillRect(0, 0, riverLeft, canvas.height);
+            ctx.fillRect(riverRight, 0, canvas.width - riverRight, canvas.height);
+            
+            // Bank glow
+            const leftGlow = ctx.createLinearGradient(riverLeft - 20, 0, riverLeft, 0);
+            leftGlow.addColorStop(0, 'rgba(0, 255, 255, 0)');
+            leftGlow.addColorStop(1, 'rgba(0, 255, 255, 0.3)');
+            
+            const rightGlow = ctx.createLinearGradient(riverRight, 0, riverRight + 20, 0);
+            rightGlow.addColorStop(0, 'rgba(0, 255, 255, 0.3)');
+            rightGlow.addColorStop(1, 'rgba(0, 255, 255, 0)');
+            
+            ctx.fillStyle = leftGlow;
+            ctx.fillRect(riverLeft - 20, 0, 20, canvas.height);
+            ctx.fillStyle = rightGlow;
+            ctx.fillRect(riverRight, 0, 20, canvas.height);
+        }
+        
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            
+            // Boat shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(-player.width / 2 + 2, -player.height / 2 + 2, player.width, player.height);
+            
+            // Boat body
+            ctx.fillStyle = '#333';
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2;
+            ctx.fillRect(-player.width / 2, -player.height / 2, player.width, player.height);
+            ctx.strokeRect(-player.width / 2, -player.height / 2, player.width, player.height);
+            
+            // Boat details
+            ctx.fillStyle = '#00ffff';
+            ctx.fillRect(-5, -20, 10, 15);
+            
+            // Glow effect
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 10;
+            ctx.strokeRect(-player.width / 2, -player.height / 2, player.width, player.height);
+            
+            ctx.restore();
+        }
+        
+        function drawUI() {
+            // Score
+            ctx.fillStyle = '#00ffff';
+            ctx.font = '24px Courier New';
+            ctx.textAlign = 'right';
+            ctx.fillText(`Score: ${score}`, canvas.width - 20, 40);
+            
+            // Speed indicator
+            ctx.textAlign = 'right';
+            ctx.font = '16px Courier New';
+            ctx.fillText(`Speed: ${gameSpeed.toFixed(1)}`, canvas.width - 20, 70);
+            
+            if (gameState === 'start') {
+                // Title
+                ctx.fillStyle = '#00ffff';
+                ctx.font = '48px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('AURORA DRIFT', canvas.width / 2, 200);
+                
+                ctx.font = '24px Courier New';
+                ctx.fillText('Neon River Challenge', canvas.width / 2, 240);
+                
+                // Instructions
+                ctx.font = '18px Courier New';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText('Press SPACE to Start', canvas.width / 2, 320);
+                
+                ctx.font = '14px Courier New';
+                ctx.fillStyle = '#aaaaaa';
+                ctx.fillText('Use A/D or Arrow Keys to steer', canvas.width / 2, 450);
+                ctx.fillText('Avoid obstacles, collect glowing orbs', canvas.width / 2, 470);
+                
+            } else if (gameState === 'gameOver') {
+                // Game Over screen
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = '#ff0000';
+                ctx.font = '48px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, 250);
+                
+                ctx.fillStyle = '#00ffff';
+                ctx.font = '24px Courier New';
+                ctx.fillText(`Final Score: ${score}`, canvas.width / 2, 300);
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '18px Courier New';
+                ctx.fillText('Press R to Restart', canvas.width / 2, 350);
+            }
+        }
+        
+        function update() {
+            if (gameState === 'playing') {
+                // Increase game speed gradually
+                gameSpeed = Math.min(maxSpeed, gameSpeed + 0.005);
+                
+                updatePlayer();
+                
+                // Spawn objects
+                spawnObstacle();
+                spawnCollectible();
+                
+                // Update objects
+                obstacles.forEach(obstacle => obstacle.update());
+                collectibles.forEach(collectible => collectible.update());
+                particles.forEach(particle => particle.update());
+                trailParticles.forEach(particle => particle.update());
+                
+                // Remove off-screen objects
+                obstacles = obstacles.filter(obstacle => !obstacle.isOffScreen());
+                collectibles = collectibles.filter(collectible => !collectible.isOffScreen());
+                particles = particles.filter(particle => !particle.isDead());
+                trailParticles = trailParticles.filter(particle => !particle.isDead());
+                
+                checkCollisions();
+            }
+            
+            auroraTime++;
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawBackground();
+            drawRiver();
+            
+            // Draw trail particles first (behind boat)
+            trailParticles.forEach(particle => particle.draw());
+            
+            if (gameState === 'playing') {
+                drawPlayer();
+            }
+            
+            // Draw game objects
+            obstacles.forEach(obstacle => obstacle.draw());
+            collectibles.forEach(collectible => collectible.draw());
+            particles.forEach(particle => particle.draw());
+            
+            drawUI();
+        }
+        
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start the game loop
+        gameLoop();
+    </script>
+</body>
+</html>
