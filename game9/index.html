@@ -1,0 +1,507 @@
+<!-- Copyright (c) 2025 IRAKLI IVANISHVILI Ball and Holes (Deterministic Random Layout) -->
+<!-- All rights reserved. Unauthorized use is prohibited. See LICENSE file for details. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Urban Bike Courier — Sunset Rush</title>
+    <style>
+        body { margin: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { border: 1px solid white; }
+    </style>
+</head>
+<body>
+
+    <button onclick="window.location.href='../index.html'" style="position: absolute; top: 20px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ⬅ Main Menu
+  </button>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        // Major section: Game Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const STATES = { START: 0, PLAYING: 1, PAUSED: 2, GAMEOVER: 3 };
+        let state = STATES.START;
+        let keys = {};
+        let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Game variables
+        const MAP_WIDTH = 2000;
+        const MAP_HEIGHT = 2000;
+        const STREET_SPACING = 200;
+        const NUM_STREETS_H = Math.floor(MAP_WIDTH / STREET_SPACING);
+        const NUM_STREETS_V = Math.floor(MAP_HEIGHT / STREET_SPACING);
+        let player = { x: 100, y: 100, angle: 0, speed: 0, jump: 0, hasParcel: true, pedalPhase: 0 };
+        let parcelPos = null;
+        let checkpoint = { x: Math.random() * MAP_WIDTH, y: Math.random() * MAP_HEIGHT };
+        let cameraX = 0, cameraY = 0;
+        let timer = 300; // 5 minutes in seconds
+        let score = 0;
+        let deliveries = 0;
+        let lastTime = performance.now();
+
+        // Obstacles: cars and pedestrians
+        let cars = [];
+        let peds = [];
+        for (let i = 0; i < 10; i++) {
+            cars.push({ x: Math.random() * MAP_WIDTH, y: Math.random() * MAP_HEIGHT, angle: Math.random() * Math.PI * 2, speed: 2 + Math.random() * 2 });
+        }
+        for (let i = 0; i < 20; i++) {
+            peds.push({ x: Math.random() * MAP_WIDTH, y: Math.random() * MAP_HEIGHT, angle: Math.random() * Math.PI * 2, speed: 0.5 + Math.random() * 0.5 });
+        }
+
+        // Traffic lights: simple cycle
+        let lightCycle = 0; // 0-10s green NS, 10-20s green EW
+
+        // Sounds
+        function playDing() {
+            let osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = 880;
+            let gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.5);
+        }
+        let pedalingOsc = null;
+        function startPedalingSound(speed) {
+            if (!pedalingOsc) {
+                pedalingOsc = audioCtx.createOscillator();
+                pedalingOsc.type = 'sawtooth';
+                let gain = audioCtx.createGain();
+                pedalingOsc.connect(gain);
+                gain.connect(audioCtx.destination);
+                gain.gain.value = 0.1;
+                pedalingOsc.start();
+            }
+            pedalingOsc.frequency.value = 100 + speed * 20;
+        }
+        function stopPedalingSound() {
+            if (pedalingOsc) {
+                pedalingOsc.stop();
+                pedalingOsc = null;
+            }
+        }
+        function playBrake() {
+            let noise = audioCtx.createBufferSource();
+            let buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.2, audioCtx.sampleRate);
+            let data = buffer.getChannelData(0);
+            for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+            noise.buffer = buffer;
+            let gain = audioCtx.createGain();
+            noise.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+            noise.start();
+        }
+        let ambianceOsc = audioCtx.createOscillator();
+        ambianceOsc.type = 'sine';
+        ambianceOsc.frequency.value = 50;
+        let ambianceGain = audioCtx.createGain();
+        ambianceOsc.connect(ambianceGain);
+        ambianceGain.connect(audioCtx.destination);
+        ambianceGain.gain.value = 0.05;
+        ambianceOsc.start();
+
+        // Event listeners
+        document.addEventListener('keydown', e => { keys[e.key] = true; if (state === STATES.START && e.key === 'Enter') state = STATES.PLAYING; if (state === STATES.GAMEOVER && e.key === 'r') resetGame(); if (state === STATES.PLAYING && e.key === 'p') state = STATES.PAUSED; else if (state === STATES.PAUSED && e.key === 'p') state = STATES.PLAYING; });
+        document.addEventListener('keyup', e => keys[e.key] = false);
+
+        // Reset game
+        function resetGame() {
+            player = { x: 100, y: 100, angle: 0, speed: 0, jump: 0, hasParcel: true, pedalPhase: 0 };
+            parcelPos = null;
+            checkpoint = { x: Math.random() * MAP_WIDTH, y: Math.random() * MAP_HEIGHT };
+            timer = 300;
+            score = 0;
+            deliveries = 0;
+            state = STATES.PLAYING;
+        }
+
+        // Major section: Game Loop
+        function gameLoop(timestamp) {
+            requestAnimationFrame(gameLoop);
+            let delta = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            if (delta > 1/30) delta = 1/30; // Cap delta
+            update(delta);
+            render();
+        }
+        gameLoop(performance.now());
+
+        // Update function
+        function update(delta) {
+            if (state !== STATES.PLAYING) return;
+
+            // Input
+            let accelerating = keys['ArrowUp'] || keys['W'];
+            let braking = keys['ArrowDown'] || keys['S'];
+            let left = keys['ArrowLeft'] || keys['A'];
+            let right = keys['ArrowRight'] || keys['D'];
+            let jumping = keys[' '];
+
+            // Physics
+            if (accelerating) player.speed += 0.2;
+            if (braking) { player.speed -= 0.3; playBrake(); }
+            player.speed = Math.max(-1, Math.min(10, player.speed)); // Limit speed
+            player.speed *= 0.98; // Friction
+            if (left) player.angle -= 0.05 * (player.speed / 5 + 0.1);
+            if (right) player.angle += 0.05 * (player.speed / 5 + 0.1);
+            player.x += Math.cos(player.angle) * player.speed;
+            player.y += Math.sin(player.angle) * player.speed;
+            player.x = Math.max(0, Math.min(MAP_WIDTH, player.x));
+            player.y = Math.max(0, Math.min(MAP_HEIGHT, player.y));
+
+            // Jump
+            if (jumping && player.jump === 0) player.jump = 1;
+            if (player.jump > 0) {
+                player.jump += delta * 10;
+                if (player.jump > 1) player.jump = 0;
+            }
+
+            // Pedaling animation
+            if (Math.abs(player.speed) > 0.1) {
+                player.pedalPhase += delta * player.speed * 2;
+                startPedalingSound(Math.abs(player.speed));
+            } else stopPedalingSound();
+
+            // Camera
+            cameraX += (player.x - canvas.width / 2 - cameraX) * 0.1;
+            cameraY += (player.y - canvas.height / 2 - cameraY) * 0.1;
+            cameraX = Math.max(0, Math.min(MAP_WIDTH - canvas.width, cameraX));
+            cameraY = Math.max(0, Math.min(MAP_HEIGHT - canvas.height, cameraY));
+
+            // Update obstacles
+            cars.forEach(car => {
+                car.x += Math.cos(car.angle) * car.speed;
+                car.y += Math.sin(car.angle) * car.speed;
+                if (car.x < 0 || car.x > MAP_WIDTH) car.angle += Math.PI;
+                if (car.y < 0 || car.y > MAP_HEIGHT) car.angle += Math.PI;
+            });
+            peds.forEach(ped => {
+                ped.x += Math.cos(ped.angle) * ped.speed;
+                ped.y += Math.sin(ped.angle) * ped.speed;
+                if (Math.random() < 0.01) ped.angle += (Math.random() - 0.5) * Math.PI;
+                if (ped.x < 0 || ped.x > MAP_WIDTH || ped.y < 0 || ped.y > MAP_HEIGHT) ped.angle += Math.PI;
+            });
+
+            // Traffic lights cycle
+            lightCycle = (lightCycle + delta) % 20;
+
+            // Collisions
+            if (player.jump === 0) {
+                cars.forEach(car => {
+                    if (Math.hypot(player.x - car.x, player.y - car.y) < 20) {
+                        player.speed *= 0.5;
+                        score -= 50;
+                        if (player.hasParcel && Math.abs(player.speed) > 3) {
+                            player.hasParcel = false;
+                            parcelPos = { x: player.x, y: player.y };
+                        }
+                    }
+                });
+                peds.forEach(ped => {
+                    if (Math.hypot(player.x - ped.x, player.y - ped.y) < 10) {
+                        player.speed *= 0.7;
+                        score -= 50;
+                    }
+                });
+            }
+
+            // Pick up parcel
+            if (!player.hasParcel && parcelPos && Math.hypot(player.x - parcelPos.x, player.y - parcelPos.y) < 10) {
+                player.hasParcel = true;
+                parcelPos = null;
+            }
+
+            // Deliver
+            if (player.hasParcel && Math.hypot(player.x - checkpoint.x, player.y - checkpoint.y) < 15) {
+                score += 100;
+                deliveries++;
+                playDing();
+                checkpoint = { x: Math.random() * MAP_WIDTH, y: Math.random() * MAP_HEIGHT };
+            }
+
+            // Timer
+            timer -= delta;
+            if (timer <= 0) {
+                timer = 0;
+                state = STATES.GAMEOVER;
+                stopPedalingSound();
+            }
+        }
+
+        // Render function
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (state === STATES.START) drawStartScreen();
+            else if (state === STATES.PAUSED) drawPauseScreen();
+            else if (state === STATES.GAMEOVER) drawGameOver();
+            else {
+                // Draw world
+                ctx.save();
+                ctx.translate(-cameraX, -cameraY);
+
+                // Sunset sky (but since top-down, ground is asphalt)
+                ctx.fillStyle = '#333'; // Asphalt
+                ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+
+                // Sunset gradient overlay for lighting
+                let grad = ctx.createLinearGradient(0, 0, MAP_WIDTH, 0);
+                grad.addColorStop(0, 'rgba(255,100,0,0.3)');
+                grad.addColorStop(1, 'rgba(100,0,100,0.3)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+
+                // Streets
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                for (let i = 0; i <= NUM_STREETS_H; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(i * STREET_SPACING, 0);
+                    ctx.lineTo(i * STREET_SPACING, MAP_HEIGHT);
+                    ctx.stroke();
+                }
+                for (let i = 0; i <= NUM_STREETS_V; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i * STREET_SPACING);
+                    ctx.lineTo(MAP_WIDTH, i * STREET_SPACING);
+                    ctx.stroke();
+                }
+
+                // Buildings (silhouettes)
+                ctx.fillStyle = '#222';
+                for (let x = 0; x < NUM_STREETS_H - 1; x++) {
+                    for (let y = 0; y < NUM_STREETS_V - 1; y++) {
+                        ctx.fillRect(x * STREET_SPACING + 50, y * STREET_SPACING + 50, STREET_SPACING - 100, STREET_SPACING - 100);
+                    }
+                }
+
+                // Traffic lights at intersections
+                for (let x = 1; x < NUM_STREETS_H; x++) {
+                    for (let y = 1; y < NUM_STREETS_V; y++) {
+                        let ix = x * STREET_SPACING;
+                        let iy = y * STREET_SPACING;
+                        ctx.fillStyle = lightCycle < 10 ? 'green' : 'red';
+                        ctx.fillRect(ix - 5, iy - 5, 10, 10);
+                    }
+                }
+
+                // Cars
+                cars.forEach(car => {
+                    if (car.x > cameraX - 50 && car.x < cameraX + canvas.width + 50 && car.y > cameraY - 50 && car.y < cameraY + canvas.height + 50) {
+                        ctx.save();
+                        ctx.translate(car.x, car.y);
+                        ctx.rotate(car.angle);
+                        ctx.fillStyle = 'blue';
+                        ctx.fillRect(-20, -10, 40, 20); // Car body
+                        // Headlights
+                        ctx.fillStyle = 'yellow';
+                        ctx.globalAlpha = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(20, -10);
+                        ctx.lineTo(50, -20);
+                        ctx.lineTo(50, 20);
+                        ctx.lineTo(20, 10);
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                        // Brake lights if braking (simple random)
+                        if (Math.random() < 0.1) {
+                            ctx.fillStyle = 'red';
+                            ctx.fillRect(-25, -8, 5, 5);
+                            ctx.fillRect(-25, 3, 5, 5);
+                        }
+                        ctx.restore();
+                    }
+                });
+
+                // Pedestrians
+                peds.forEach(ped => {
+                    if (ped.x > cameraX - 20 && ped.x < cameraX + canvas.width + 20 && ped.y > cameraY - 20 && ped.y < cameraY + canvas.height + 20) {
+                        ctx.fillStyle = 'gray';
+                        ctx.beginPath();
+                        ctx.arc(ped.x, ped.y, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+
+                // Parcel if dropped
+                if (parcelPos) {
+                    ctx.fillStyle = 'brown';
+                    ctx.fillRect(parcelPos.x - 5, parcelPos.y - 5, 10, 10);
+                    // Shadow
+                    ctx.fillStyle = 'black';
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillRect(parcelPos.x, parcelPos.y, 10, 5);
+                    ctx.globalAlpha = 1;
+                }
+
+                // Checkpoint
+                ctx.strokeStyle = 'lime';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(checkpoint.x, checkpoint.y, 15, 0, Math.PI * 2);
+                ctx.stroke();
+                // Glow
+                ctx.globalAlpha = 0.5;
+                ctx.fillStyle = 'lime';
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // Player bike
+                ctx.save();
+                ctx.translate(player.x, player.y);
+                ctx.rotate(player.angle);
+                // Bike frame
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(-10, 0);
+                ctx.lineTo(10, 0);
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -5);
+                ctx.stroke();
+                // Wheels
+                ctx.beginPath();
+                ctx.arc(-10, 0, 5, 0, Math.PI * 2);
+                ctx.arc(10, 0, 5, 0, Math.PI * 2);
+                ctx.stroke();
+                // Rider
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(0, -10, 5, 0, Math.PI * 2); // Head
+                ctx.fill();
+                ctx.fillRect(-3, -5, 6, 10); // Torso
+                // Arms
+                ctx.beginPath();
+                ctx.moveTo(-3, -5);
+                ctx.lineTo(-8, 0);
+                ctx.moveTo(3, -5);
+                ctx.lineTo(8, 0);
+                ctx.stroke();
+                // Legs pedaling
+                let legAngle = Math.sin(player.pedalPhase) * 0.5;
+                ctx.beginPath();
+                ctx.moveTo(0, 5);
+                ctx.lineTo(-5, 10 + legAngle * 5);
+                ctx.moveTo(0, 5);
+                ctx.lineTo(5, 10 - legAngle * 5);
+                ctx.stroke();
+                // Shadow
+                if (player.jump === 0) {
+                    ctx.fillStyle = 'black';
+                    ctx.globalAlpha = 0.3;
+                    ctx.ellipse(0, 5, 15, 5, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
+                ctx.restore();
+
+                // Dynamic shadows (simple for player)
+                ctx.fillStyle = 'black';
+                ctx.globalAlpha = 0.2;
+                ctx.fillRect(player.x + 10, player.y, 20, 5); // Shadow to the side for sunset
+                ctx.globalAlpha = 1;
+
+                ctx.restore();
+
+                // HUD
+                drawHUD();
+            }
+        }
+
+        // Draw HUD
+        function drawHUD() {
+            // Timer
+            let min = Math.floor(timer / 60);
+            let sec = Math.floor(timer % 60);
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText(`${min}:${sec < 10 ? '0' : ''}${sec}`, 10, 30);
+
+            // Score
+            ctx.fillText(`Score: ${score}`, canvas.width - 100, 30);
+
+            // Deliveries
+            ctx.fillText(`Deliveries: ${deliveries}`, 10, canvas.height - 20);
+
+            // Mini-map
+            let miniSize = 100;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(canvas.width - miniSize - 10, 10, miniSize, miniSize);
+            // Player dot
+            ctx.fillStyle = 'red';
+            ctx.fillRect(canvas.width - miniSize - 10 + (player.x / MAP_WIDTH) * miniSize - 2, 10 + (player.y / MAP_HEIGHT) * miniSize - 2, 4, 4);
+            // Checkpoint dot
+            ctx.fillStyle = 'lime';
+            ctx.fillRect(canvas.width - miniSize - 10 + (checkpoint.x / MAP_WIDTH) * miniSize - 2, 10 + (checkpoint.y / MAP_HEIGHT) * miniSize - 2, 4, 4);
+        }
+
+        // Draw Start Screen
+        function drawStartScreen() {
+            // Background
+            let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, 'orange');
+            grad.addColorStop(1, 'purple');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Title
+            ctx.fillStyle = 'white';
+            ctx.font = '40px Arial';
+            ctx.fillText('Urban Bike Courier — Sunset Rush', 50, 100);
+            // Instructions
+            ctx.font = '20px Arial';
+            ctx.fillText('Deliver parcels to checkpoints in the city before time runs out.', 50, 150);
+            ctx.fillText('Avoid cars, pedestrians, and obstacles.', 50, 180);
+            ctx.fillText('Press ENTER to start', 50, 220);
+            // Controls
+            ctx.fillText('Controls:', 50, canvas.height - 150);
+            ctx.fillText('W/Up: Accelerate', 50, canvas.height - 120);
+            ctx.fillText('S/Down: Brake', 50, canvas.height - 90);
+            ctx.fillText('A/Left: Steer left', 50, canvas.height - 60);
+            ctx.fillText('D/Right: Steer right', 50, canvas.height - 30);
+            ctx.fillText('Space: Jump', 300, canvas.height - 120);
+            ctx.fillText('R: Restart', 300, canvas.height - 90);
+            ctx.fillText('P: Pause', 300, canvas.height - 60);
+        }
+
+        // Draw Pause Screen
+        function drawPauseScreen() {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '30px Arial';
+            ctx.fillText('Paused', canvas.width / 2 - 50, canvas.height / 2);
+            // Controls
+            ctx.font = '20px Arial';
+            ctx.fillText('Controls:', 50, canvas.height - 150);
+            ctx.fillText('W/Up: Accelerate', 50, canvas.height - 120);
+            ctx.fillText('S/Down: Brake', 50, canvas.height - 90);
+            ctx.fillText('A/Left: Steer left', 50, canvas.height - 60);
+            ctx.fillText('D/Right: Steer right', 50, canvas.height - 30);
+            ctx.fillText('Space: Jump', 300, canvas.height - 120);
+            ctx.fillText('R: Restart', 300, canvas.height - 90);
+            ctx.fillText('P: Resume', 300, canvas.height - 60);
+        }
+
+        // Draw Game Over
+        function drawGameOver() {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '40px Arial';
+            ctx.fillText('Game Over', canvas.width / 2 - 100, canvas.height / 2 - 50);
+            ctx.font = '30px Arial';
+            ctx.fillText(`Total Score: ${score}`, canvas.width / 2 - 100, canvas.height / 2);
+            ctx.font = '20px Arial';
+            ctx.fillText('Press R to Restart', canvas.width / 2 - 100, canvas.height / 2 + 50);
+        }
+    </script>
+</body>
+</html>
