@@ -1,0 +1,1037 @@
+<!-- Copyright (c) 2025 IRAKLI IVANISHVILI Whispers of the Lantern — A Tiny Text Adventure -->
+<!-- All rights reserved. Unauthorized use is prohibited. See LICENSE file for details. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Whispers of the Lantern — A Tiny Text Adventure</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --ink:#e6edf3; --muted:#9fb3c8;
+    --accent:#58a6ff; --accent-2:#7ee787; --danger:#ff7b72; --shadow:rgba(0,0,0,.35);
+    --card:#0f1623; --choice:#1c2431; --focus:#ffd60a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink); background:radial-gradient(1000px 600px at 20% -10%, #172034 0%, #0d1117 55%), #0d1117;
+    font:16px/1.55 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+  }
+  a{color:var(--accent)}
+  .app{min-height:100%; display:flex; flex-direction:column}
+  header{
+    position:sticky; top:0; z-index:10;
+    background:linear-gradient(180deg, rgba(13,17,23,.95), rgba(13,17,23,.75));
+    backdrop-filter: blur(6px);
+    border-bottom:1px solid #1f2632;
+    padding:.75rem 1rem; display:flex; align-items:center; gap:.75rem; justify-content:space-between;
+  }
+  header h1{font-size:1.15rem; margin:0; letter-spacing:.5px}
+  header small{color:var(--muted)}
+  .menu{display:flex; gap:.5rem; flex-wrap:wrap}
+  button, .btn{
+    background:var(--choice); color:var(--ink); border:1px solid #263145; border-radius:.6rem;
+    padding:.5rem .8rem; cursor:pointer; transition:.15s transform ease, .2s box-shadow;
+    box-shadow:0 2px 6px var(--shadow);
+  }
+  button:hover, .btn:hover{transform:translateY(-1px); box-shadow:0 4px 12px var(--shadow)}
+  button:active{transform:translateY(0)}
+  button[aria-pressed="true"]{outline:2px solid var(--focus)}
+  button:focus-visible{outline:2px solid var(--focus); outline-offset:2px}
+  .grid{
+    display:grid; gap:1rem; padding:1rem; flex:1;
+    grid-template-columns: 1fr 360px;
+  }
+  @media (max-width: 900px){
+    .grid{grid-template-columns:1fr}
+  }
+  .left, .right{min-width:0}
+  .card{
+    background:var(--panel); border:1px solid #1f2632; border-radius:1rem; box-shadow:0 8px 24px var(--shadow);
+  }
+  .narrative{padding:1rem; max-height:min(60vh, 54rem); overflow:auto; scroll-behavior:smooth}
+  .typewriter .cursor{display:inline-block; width:.65ch; background:var(--ink); margin-left:2px; animation:blink 1s infinite}
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+  .choices{display:flex; flex-direction:column; gap:.5rem; padding:1rem; border-top:1px dashed #263145}
+  .choice{ text-align:left }
+  .choice[data-selected="true"]{outline:2px solid var(--accent); box-shadow:0 0 0 4px rgba(88,166,255,.12)}
+  .cmdbar{padding:.75rem 1rem; border-top:1px solid #1f2632; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap}
+  .cmdbar input[type="text"]{
+    flex:1; padding:.6rem .75rem; border-radius:.6rem; border:1px solid #263145; background:#0f1520; color:var(--ink)
+  }
+  .hud{display:grid; gap:1rem}
+  .hud .row{display:grid; grid-template-columns:1fr 1fr; gap:.75rem}
+  .hud .stat{
+    padding:.75rem; border-radius:.8rem; background:var(--card); border:1px solid #263145
+  }
+  .mini{padding:.75rem}
+  canvas{width:100%; height:auto; display:block; border-radius:.8rem; background:#0b1320; border:1px solid #263145}
+  .bad{color:var(--danger)}
+  .ok{color:var(--accent-2)}
+  .muted{color:var(--muted)}
+  .howto{padding:1rem; display:none}
+  .howto.open{display:block}
+  .inventory{padding:0 .75rem .75rem; display:none}
+  .inventory.open{display:block}
+  .inv-list{display:flex; flex-wrap:wrap; gap:.5rem}
+  .pill{padding:.35rem .6rem; border:1px solid #263145; background:#121a28; border-radius:999px}
+  .start{
+    min-height:100dvh; display:grid; place-items:center; padding:2rem;
+    background:
+      radial-gradient(1200px 800px at 80% 10%, rgba(88,166,255,.06), transparent 50%),
+      radial-gradient(1000px 600px at 10% 90%, rgba(126,231,135,.06), transparent 50%);
+  }
+  .start .panel{
+    max-width:680px; padding:2rem; text-align:center
+  }
+  .title{font-size:2rem; margin:.25rem 0}
+  .subtitle{color:var(--muted); margin-top:0}
+  .slots{display:flex; gap:.5rem; flex-wrap:wrap}
+  .sr{position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden}
+</style>
+</head>
+<body>
+      <button onclick="window.location.href='../index.html'" style="position: absolute; top: 100px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ⬅ Main Menu
+  </button>
+<div class="app" id="app" aria-live="polite">
+
+  <!-- Header -->
+  <header>
+    <div>
+      <h1 aria-label="Game Title">Whispers of the Lantern</h1>
+      <small class="muted">A tiny text adventure set in a foggy harbor town</small>
+    </div>
+    <nav class="menu" aria-label="Menu">
+      <button id="btnMenuHow" aria-label="How to Play (H)">How to Play</button>
+      <button id="btnMenuInv" aria-label="Toggle Inventory (I)">Inventory</button>
+      <button id="btnMenuSave" aria-label="Save Game">Save</button>
+      <button id="btnMenuLoad" aria-label="Load Game">Load</button>
+      <button id="btnMenuReset" aria-label="Reset Game Progress">Reset</button>
+    </nav>
+  </header>
+
+  <!-- Start Screen -->
+  <div id="start" class="start">
+    <div class="card panel" role="dialog" aria-labelledby="startTitle">
+      <div style="margin-bottom:1.25rem">
+        <div class="muted">Text Adventure + Light Graphics</div>
+        <div id="startTitle" class="title">Whispers of the Lantern</div>
+        <div class="subtitle">Fog, secrets, and a lantern that remembers.</div>
+      </div>
+      <div style="display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap">
+        <button id="btnNew" class="btn" aria-label="Start a New Game">New Game</button>
+        <button id="btnCont" class="btn" aria-label="Continue from Autosave">Continue</button>
+        <button id="btnHow" class="btn" aria-expanded="false" aria-controls="howto-start">How to Play</button>
+      </div>
+      <div id="howto-start" class="howto" role="region" aria-label="How to Play">
+        <h3>How to Play</h3>
+        <p>Choose with buttons or type commands (e.g., <em>look</em>, <em>take key</em>, <em>use lantern</em>).</p>
+        <ul>
+          <li><strong>Enter</strong>: activate selected choice / submit command</li>
+          <li><strong>↑ / ↓</strong>: change selected choice</li>
+          <li><strong>I</strong>: toggle inventory</li>
+          <li><strong>M</strong>: focus mini-map</li>
+          <li><strong>H</strong>: open this help</li>
+        </ul>
+        <p class="muted">Works offline. Your progress autosaves on scene change.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Game Grid -->
+  <main class="grid" id="game" hidden>
+    <section class="left card" aria-label="Narrative Panel">
+      <div class="narrative" id="narrative" tabindex="0" aria-live="polite"></div>
+      <div class="choices" id="choices" aria-label="Choices"></div>
+      <div class="cmdbar">
+        <label class="sr" for="cmd">Command Input</label>
+        <input id="cmd" type="text" placeholder='Try: "look", "take key", "use lantern"' list="cmdlist" aria-label="Command input"/>
+        <datalist id="cmdlist"></datalist>
+        <button id="cmdGo" aria-label="Submit Command">Enter</button>
+      </div>
+    </section>
+
+    <aside class="right">
+      <div class="card" style="padding:1rem">
+        <div class="row">
+          <div class="stat" aria-live="polite">
+            <div class="muted">Location</div>
+            <div id="locName" style="font-weight:600">—</div>
+          </div>
+          <div class="stat">
+            <div class="muted">Stats</div>
+            <div>Health: <strong id="statHealth">10</strong></div>
+            <div>Mind: <strong id="statMind">10</strong></div>
+            <div>Items: <strong id="statItems">0</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mini" aria-label="Mini Map">
+        <canvas id="map" width="240" height="160" aria-label="Mini-map canvas"></canvas>
+        <div class="muted" style="padding:.25rem .25rem 0">Mini-map — discovered rooms are faint; current room glows.</div>
+      </div>
+
+      <div class="card">
+        <button id="btnInv" class="btn" style="margin:.75rem" aria-expanded="false" aria-controls="inventory">Toggle Inventory</button>
+        <div id="inventory" class="inventory" role="region" aria-label="Inventory">
+          <div id="invList" class="inv-list"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="howto" id="howto" role="region" aria-label="How to Play">
+          <h3 style="margin:1rem 1rem 0">How to Play</h3>
+          <div style="padding:0 1rem 1rem">
+            <p>Choose options or type commands. Verbs supported: <em>look</em>, <em>examine</em>, <em>inspect</em>, <em>take</em>, <em>grab</em>, <em>use</em>, <em>talk</em>, <em>open</em>, <em>inventory</em>, <em>help</em>.</p>
+            <ul>
+              <li><strong>↑ / ↓</strong> — focus previous/next choice</li>
+              <li><strong>Enter</strong> — activate choice / submit command</li>
+              <li><strong>I</strong> — open/close inventory</li>
+              <li><strong>M</strong> — focus mini-map</li>
+              <li><strong>H</strong> — toggle this help</li>
+            </ul>
+            <p>Examples: <code>look room</code>, <code>take key</code>, <code>use key</code>, <code>talk keeper</code>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:1rem">
+        <div style="display:flex; gap:.5rem; flex-wrap:wrap">
+          <button id="btnSave" aria-label="Open Save Slots">Save</button>
+          <button id="btnLoad" aria-label="Open Load Slots">Load</button>
+          <button id="btnReset" aria-label="Reset Progress">Reset</button>
+        </div>
+        <div class="slots" style="margin-top:.5rem">
+          <button class="slot" data-slot="1" aria-label="Save or Load Slot 1">Slot 1</button>
+          <button class="slot" data-slot="2" aria-label="Save or Load Slot 2">Slot 2</button>
+          <button class="slot" data-slot="3" aria-label="Save or Load Slot 3">Slot 3</button>
+        </div>
+        <small class="muted">Autosaves on scene change. Manual slots are optional.</small>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+/* ==========================================================
+   Whispers of the Lantern — Tiny Text Adventure Engine
+   Single-file, offline-ready. No external assets. Enjoy!
+   ========================================================== */
+
+/** ---------- Content Model (Scenes JSON) ----------
+ * Scene {
+ *   id: string, title: string, text: string,
+ *   artHint?: string,
+ *   map?: {x:number,y:number}, // for mini-map placement
+ *   choices: Choice[],
+ *   onEnter?: (state)=>void,
+ *   onCommand?: (cmd,state)=>CommandResult
+ * }
+ * Choice {
+ *   text: string, goto?: string, end?: string,
+ *   needsFlag?: string, notFlag?: string,
+ *   needsItem?: string,
+ *   setsFlag?: string, clearsFlag?: string,
+ *   itemGained?: string, itemLost?: string,
+ *   statChange?: {health?:number, mind?:number}
+ * }
+ * -------------------------------------------------- */
+
+const SCENES = [
+  {
+    id:"dock",
+    title:"The Docks",
+    artHint:"dock",
+    map:{x:1,y:2},
+    text:"Midnight fog drapes the harbor. Ropes creak. Somewhere, a bell counts the tide. The Keeper waits by a crooked lamp, eyes pale as the surf.",
+    choices:[
+      {text:"Talk to the Keeper", setsFlag:"talkedToKeeper", goto:"keeper"},
+      {text:"Head to the Alley", goto:"alley"},
+      {text:"Walk to the Fishmarket", goto:"market"},
+      {text:"Go to the Old Square", goto:"square"},
+      {text:"Check the Warehouse Door", goto:"warehouseDoor"}
+    ],
+    onCommand:(c,s)=> {
+      if(matches(c,["talk keeper","talk to keeper","speak keeper","speak to keeper"])){
+        s.flags.talkedToKeeper = true; return go("keeper",s,"You approach the Keeper.");
+      }
+      return null;
+    }
+  },
+  {
+    id:"keeper",
+    title:"Harbor Keeper",
+    artHint:"lantern",
+    map:{x:1,y:1},
+    text:"\"The lantern is not a lamp,\" the Keeper rasps. \"It remembers. Find it before the fog forgets you.\" He presses a trembling finger toward the old warehouse.",
+    choices:[
+      {text:"Ask about the lantern", setsFlag:"talkedToKeeper", statChange:{mind:+1}, goto:"keeper2"},
+      {text:"Return to the Docks", goto:"dock"},
+      {text:"Go to the Warehouse Door", goto:"warehouseDoor"}
+    ]
+  },
+  {
+    id:"keeper2",
+    title:"The Warning",
+    artHint:"lantern",
+    map:{x:1,y:1},
+    text:"\"It draws memories like a tidepool draws fish,\" he says. \"If you keep it, it keeps you. If you smash it, some ghosts will never find harbor.\"",
+    choices:[
+      {text:"Return to the Docks", goto:"dock"},
+      {text:"Go to the Warehouse Door", goto:"warehouseDoor"}
+    ]
+  },
+  {
+    id:"alley",
+    title:"Shadowed Alley",
+    artHint:"key",
+    map:{x:0,y:2},
+    text:"A narrow vein between warehouses. Drips tick. A crate slumps under rain. Something metallic glints beneath torn canvas.",
+    choices:[
+      {text:"Search the crate (find a Rusty Key)", itemGained:"Rusty Key", goto:"alleyFound", notFlag:"tookKey"},
+      {text:"Return to the Docks", goto:"dock"},
+      {text:"Slip toward the Warehouse Door", goto:"warehouseDoor"}
+    ],
+    onEnter:(s)=>{ /* mark if already took the key */ if(s.inventory.includes("Rusty Key")) s.flags.tookKey = true; },
+    onCommand:(c,s)=>{
+      if(startsWith(c,"take") && c.includes("key")){
+        if(!s.inventory.includes("Rusty Key")) {
+          s.inventory.push("Rusty Key"); s.flags.tookKey=true; s.message="You pocket the Rusty Key.";
+          return stay();
+        } else { s.message="You already have the key."; return stay(); }
+      }
+      return null;
+    }
+  },
+  {
+    id:"alleyFound",
+    title:"Shadowed Alley",
+    artHint:"key",
+    map:{x:0,y:2},
+    text:"Your fingers close on cold teeth of a Rusty Key. The crate exhales damp dust.",
+    choices:[
+      {text:"Return to the Docks", goto:"dock"},
+      {text:"Head for the Warehouse Door", goto:"warehouseDoor"}
+    ],
+    onEnter:(s)=>{ if(!s.inventory.includes("Rusty Key")) s.inventory.push("Rusty Key"); }
+  },
+  {
+    id:"market",
+    title:"Fishmarket",
+    artHint:"shop",
+    map:{x:2,y:2},
+    text:"Stalls huddle like gulls. A trader with salt in his beard polishes a brass token. \"Old coins for old codes,\" he winks.",
+    choices:[
+      {text:"Trade Old Coin for the warehouse code", needsItem:"Old Coin", itemLost:"Old Coin", setsFlag:"learnedCode", goto:"marketAfterTrade"},
+      {text:"Browse and leave", goto:"dock"},
+      {text:"Head to the Old Square", goto:"square"}
+    ],
+    onCommand:(c,s)=>{
+      if(matches(c,["talk trader","talk to trader","speak trader","speak to trader"])){
+        s.message = "Trader: \"Bring me an Old Coin, and I'll tell you what opens old doors.\"";
+        return stay();
+      }
+      if(c.includes("trade") && c.includes("coin")){
+        if(s.inventory.includes("Old Coin")){
+          s.flags.learnedCode=true; removeItem(s,"Old Coin"); s.message="You trade the coin. The trader murmurs: \"The code is 3-1-4.\"";
+          return stay();
+        } else {
+          s.message="You have no Old Coin to trade."; return stay();
+        }
+      }
+      return null;
+    }
+  },
+  {
+    id:"marketAfterTrade",
+    title:"Fishmarket",
+    artHint:"shop",
+    map:{x:2,y:2},
+    text:"\"Remember: 3-1-4,\" the trader whispers. \"Don't let the fog rearrange it.\"",
+    choices:[
+      {text:"Return to the Docks", goto:"dock"},
+      {text:"Go to the Warehouse Door", goto:"warehouseDoor"}
+    ]
+  },
+  {
+    id:"square",
+    title:"Old Square",
+    artHint:"fountain",
+    map:{x:1,y:3},
+    text:"A cracked fountain burbles like a tired throat. In the basin, a coin winks through ripples.",
+    choices:[
+      {text:"Reach into the basin (take Old Coin)", itemGained:"Old Coin", goto:"squareCoin", notFlag:"tookCoin"},
+      {text:"Return to the Docks", goto:"dock"},
+      {text:"Walk to the Fishmarket", goto:"market"}
+    ],
+    onEnter:(s)=>{ if(s.inventory.includes("Old Coin")) s.flags.tookCoin=true; },
+    onCommand:(c,s)=>{
+      if(startsWith(c,"take") && (c.includes("coin") || c.includes("old coin"))){
+        if(!s.inventory.includes("Old Coin")){
+          s.inventory.push("Old Coin"); s.flags.tookCoin=true; s.message="Water bites your wrist. You fish out an Old Coin.";
+        } else s.message="Your pockets already jingle with that coin.";
+        return stay();
+      }
+      return null;
+    }
+  },
+  {
+    id:"squareCoin",
+    title:"Old Square",
+    artHint:"fountain",
+    map:{x:1,y:3},
+    text:"You lift an Old Coin, pitted as moon-cheese. The fountain returns to its mutter.",
+    choices:[
+      {text:"Bring the coin to the Trader", goto:"market"},
+      {text:"Back to the Docks", goto:"dock"}
+    ],
+    onEnter:(s)=>{ if(!s.inventory.includes("Old Coin")) s.inventory.push("Old Coin"); }
+  },
+  {
+    id:"warehouseDoor",
+    title:"Warehouse Door",
+    artHint:"door",
+    map:{x:0,y:1},
+    text:"An iron door with a number pad, crusted with salt. A chain snakes the handle, but your key might fit the side lock.",
+    choices:[
+      {text:"Use Rusty Key on the side lock", needsItem:"Rusty Key", setsFlag:"openedWarehouse", goto:"pad"},
+      {text:"Try to guess the code (3 digits)", goto:"pad"},
+      {text:"Return to the Docks", goto:"dock"}
+    ],
+    onCommand:(c,s)=>{
+      if((c.includes("use")||c.includes("open")) && c.includes("key")){
+        if(s.inventory.includes("Rusty Key")){
+          s.flags.openedWarehouse = true; s.message="The chain loosens with a shriek. The pad beeps awake.";
+          return go("pad",s);
+        } else { s.message="You pat your pockets—no key."; return stay(); }
+      }
+      return null;
+    }
+  },
+  {
+    id:"pad",
+    title:"Keypad",
+    artHint:"numbers",
+    map:{x:0,y:1},
+    text:"Red digits blink through condensation. A note corner is welded under rust: _circles, lines, circles…_",
+    choices:[
+      {text:"Enter the code (314) if you know it", needsFlag:"learnedCode", goto:"warehouse"},
+      {text:"Try a random code (risk your Mind)", statChange:{mind:-1}, goto:"padWrong"},
+      {text:"Step away from the door", goto:"warehouseDoor"}
+    ],
+    onCommand:(c,s)=>{
+      const m = c.match(/(\d{3})/);
+      if(m){
+        const code = m[1];
+        if(code==="314" || (s.flags.learnedCode && perm314(code))){
+          return go("warehouse",s,"The lock coughs green.");
+        } else {
+          s.stats.mind = Math.max(0, s.stats.mind-1);
+          s.message = "The pad buzzes wrong. The noise needles your thoughts (-1 Mind).";
+          return stay();
+        }
+      }
+      return null;
+    }
+  },
+  {
+    id:"padWrong",
+    title:"Keypad",
+    artHint:"numbers",
+    map:{x:0,y:1},
+    text:"The wrong tone echoes into the fog. Your temples throb.",
+    choices:[
+      {text:"Try again", goto:"pad"},
+      {text:"Step away", goto:"warehouseDoor"}
+    ]
+  },
+  {
+    id:"warehouse",
+    title:"Warehouse Interior",
+    artHint:"lantern",
+    map:{x:0,y:0},
+    text:"Crates breathe mildew. On a plinth: the Lantern—glass like a frozen wave, flame barely an idea. It hums your name.",
+    choices:[
+      {text:"Take the Lantern", itemGained:"Lantern", setsFlag:"hasLantern", goto:"lanternTaken", notFlag:"hasLantern"},
+      {text:"Leave quietly", goto:"dock"},
+      {text:"Climb to the Cliff", goto:"cliff"}
+    ],
+    onEnter:(s)=>{
+      if(!s.flags.openedWarehouse){ s.message="The door should be open first."; }
+    },
+    onCommand:(c,s)=>{
+      if(startsWith(c,"take") && c.includes("lantern")){
+        if(!s.inventory.includes("Lantern")){
+          s.inventory.push("Lantern"); s.flags.hasLantern=true; s.message="The Lantern feels heavier than light.";
+          return stay();
+        } else { s.message="It's already yours—for now."; return stay(); }
+      }
+      return null;
+    }
+  },
+  {
+    id:"lanternTaken",
+    title:"Warehouse Interior",
+    artHint:"lantern",
+    map:{x:0,y:0},
+    text:"The Lantern warms your palms. Shadows recoil like polite cats.",
+    choices:[
+      {text:"Return it to the Keeper (ending)", needsFlag:"talkedToKeeper", goto:"keeperEnding"},
+      {text:"Keep it and leave (ending)", goto:"keepEnding"},
+      {text:"Climb to the Cliff (ending)", goto:"smashEnding"}
+    ]
+  },
+  {
+    id:"cliff",
+    title:"Sea Cliff",
+    artHint:"cliff",
+    map:{x:2,y:0},
+    text:"Wind jabs your coat. Below, the harbor scrawls in phosphor. The Lantern's hum braids with the surf.",
+    choices:[
+      {text:"Smash the Lantern on the rocks (ending)", needsItem:"Lantern", statChange:{mind:-2}, goto:"smashEnding"},
+      {text:"Climb down, back to town", goto:"dock"}
+    ]
+  },
+
+  /* ----------- Endings ----------- */
+  {
+    id:"keeperEnding",
+    title:"Ending — \"Harbor Remembers\"",
+    artHint:"lantern",
+    map:{x:1,y:1},
+    text:"The Keeper cups the Lantern. The fog brightens, resolving faces you miss. \"Some lights belong to shores,\" he says. Your chest loosens (+1 Mind).",
+    choices:[
+      {text:"Play again (New Game)", goto:"dock", statChange:{mind:+1}}
+    ],
+    onEnter:(s)=>{ s.ending="keeper"; }
+  },
+  {
+    id:"keepEnding",
+    title:"Ending — \"Kept by What You Keep\"",
+    artHint:"lantern",
+    map:{x:2,y:1},
+    text:"You tuck the Lantern under your coat. Nights lengthen. Memories obey you, but only the sweet ones. The others wait.",
+    choices:[
+      {text:"Play again (New Game)", goto:"dock"}
+    ],
+    onEnter:(s)=>{ s.ending="keep"; }
+  },
+  {
+    id:"smashEnding",
+    title:"Ending — \"Salt & Glass\"",
+    artHint:"shards",
+    map:{x:2,y:0},
+    text:"Glass scatters like tame stars. The hum dies; the wind laughs. Some ghosts will drift forever, but the tide inside you is your own.",
+    choices:[
+      {text:"Play again (New Game)", goto:"dock"}
+    ],
+    onEnter:(s)=>{ s.stats.mind=Math.max(0,s.stats.mind-2); s.ending="smash"; }
+  }
+];
+
+/* --- Helpers for specific puzzles --- */
+function perm314(code){ // accept any permutation if learned (slight mercy)
+  const a=code.split('').sort().join(''), b="314".split('').sort().join(''); return a===b;
+}
+
+/* ---------- Global State ---------- */
+const DEFAULT_STATE = () => ({
+  currentSceneId:"dock",
+  flags:{ talkedToKeeper:false, openedWarehouse:false, learnedCode:false, hasLantern:false },
+  stats:{ health:10, mind:10 },
+  inventory:[],
+  discovered:{}, // map: sceneId -> true
+  message:"",
+  ending:null,
+  choiceIndex:0
+});
+let STATE = DEFAULT_STATE();
+
+/* ---------- DOM ---------- */
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const els = {
+  start: $("#start"),
+  game: $("#game"),
+  narrative: $("#narrative"),
+  choices: $("#choices"),
+  cmd: $("#cmd"),
+  cmdGo: $("#cmdGo"),
+  cmdList: $("#cmdlist"),
+  locName: $("#locName"),
+  statHealth: $("#statHealth"),
+  statMind: $("#statMind"),
+  statItems: $("#statItems"),
+  invBtn: $("#btnInv"),
+  invPanel: $("#inventory"),
+  invList: $("#invList"),
+  map: $("#map"),
+  howto: $("#howto"),
+  headerHow: $("#btnMenuHow"),
+  headerInv: $("#btnMenuInv"),
+  headerSave: $("#btnMenuSave"),
+  headerLoad: $("#btnMenuLoad"),
+  headerReset: $("#btnMenuReset"),
+  save: $("#btnSave"),
+  load: $("#btnLoad"),
+  reset: $("#btnReset"),
+  slots: $$(".slot"),
+  btnNew: $("#btnNew"),
+  btnCont: $("#btnCont"),
+  btnHow: $("#btnHow"),
+  howStart: $("#howto-start"),
+  cmdSubmit: $("#cmdGo")
+};
+
+/* ---------- Local Storage Keys ---------- */
+const LS = {
+  AUTOSAVE: "lantern_autosave_v1",
+  SLOT: n => `lantern_save_slot_${n}`
+};
+
+/* ---------- Engine ---------- */
+function init(){
+  // Start screen
+  els.btnNew.addEventListener("click", newGame);
+  els.btnCont.addEventListener("click", continueGame);
+  els.btnHow.addEventListener("click", ()=> toggleSection(els.howStart));
+  // Header menu
+  els.headerHow.onclick = ()=> toggleSection(els.howto);
+  els.headerInv.onclick = ()=> toggleInventory();
+  els.headerSave.onclick = ()=> savePrompt();
+  els.headerLoad.onclick = ()=> loadPrompt();
+  els.headerReset.onclick = ()=> doReset();
+  // Sidebar controls
+  els.invBtn.onclick = ()=> toggleInventory();
+  els.save.onclick = ()=> savePrompt();
+  els.load.onclick = ()=> loadPrompt();
+  els.reset.onclick = ()=> doReset();
+  els.slots.forEach(b=> b.addEventListener("click", onSlotClick));
+  // Command
+  els.cmdSubmit.addEventListener("click", submitCommand);
+  els.cmd.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); submitCommand(); } });
+  // Keyboard shortcuts
+  document.addEventListener("keydown", onKey);
+  // Enable/disable Continue
+  els.btnCont.disabled = !localStorage.getItem(LS.AUTOSAVE);
+  // Kick off map loop
+  startMapLoop();
+}
+function toggleSection(el){ el.classList.toggle("open"); el.previousElementSibling?.setAttribute?.("aria-expanded", el.classList.contains("open")) }
+function toggleInventory(){
+  const open = !els.invPanel.classList.contains("open");
+  els.invPanel.classList.toggle("open", open);
+  els.invBtn.setAttribute("aria-expanded", String(open));
+}
+function newGame(){
+  STATE = DEFAULT_STATE();
+  showGame();
+  gotoScene(STATE.currentSceneId, "The tide turns. Your footsteps begin at the docks.");
+}
+function continueGame(){
+  const json = localStorage.getItem(LS.AUTOSAVE);
+  if(json){
+    STATE = safeParse(json) || DEFAULT_STATE();
+    showGame();
+    renderUI();
+  } else {
+    // fallback to new game
+    newGame();
+  }
+}
+function showGame(){
+  els.start.hidden = true; els.game.hidden = false;
+  // ensure help collapsed initially on mobile
+  els.howto.classList.remove("open");
+}
+function gotoScene(id, message){
+  const scene = getScene(id);
+  if(!scene){ // fail-safe
+    STATE.message = "You drift, lost in fog. (Scene missing.)";
+    STATE.currentSceneId = "dock";
+  } else {
+    STATE.currentSceneId = id;
+    STATE.discovered[id] = true;
+    if(message) STATE.message = message; else STATE.message="";
+    scene.onEnter?.(STATE);
+  }
+  autosave();
+  STATE.choiceIndex = 0;
+  renderUI(true);
+}
+function autosave(){ localStorage.setItem(LS.AUTOSAVE, JSON.stringify(STATE)); }
+function savePrompt(){ announce("Click a slot to save."); }
+function loadPrompt(){ announce("Click a slot to load."); }
+function onSlotClick(e){
+  const n = e.currentTarget.getAttribute("data-slot");
+  // If Shift held -> load; else -> save (or use explicit buttons focus)
+  if(document.activeElement===els.load || e.shiftKey){
+    loadSlot(n);
+  } else if(document.activeElement===els.save){
+    saveSlot(n);
+  } else {
+    // Contextless: toggle behavior based on existing content
+    localStorage.getItem(LS.SLOT(n)) ? loadSlot(n) : saveSlot(n);
+  }
+}
+function saveSlot(n){
+  localStorage.setItem(LS.SLOT(n), JSON.stringify(STATE));
+  announce(`Saved to Slot ${n}.`);
+}
+function loadSlot(n){
+  const json = localStorage.getItem(LS.SLOT(n));
+  if(!json){ announce(`Slot ${n} is empty.`); return; }
+  STATE = safeParse(json) || DEFAULT_STATE();
+  showGame(); renderUI();
+  announce(`Loaded Slot ${n}.`);
+}
+function doReset(){
+  if(confirm("Reset all progress (autosave and slots)?")){
+    Object.keys(localStorage).forEach(k=>{ if(k.startsWith("lantern_")) localStorage.removeItem(k); });
+    location.reload();
+  }
+}
+
+/* ---------- Rendering ---------- */
+let twTimer=null;
+function renderUI(typewrite=false){
+  const scene = getScene(STATE.currentSceneId);
+  // Header/HUD
+  els.locName.textContent = scene?.title || "—";
+  els.statHealth.textContent = STATE.stats.health;
+  els.statMind.textContent = STATE.stats.mind;
+  els.statItems.textContent = STATE.inventory.length;
+  // Inventory
+  renderInventory();
+  // Narrative
+  const parts = [];
+  if(STATE.message) parts.push(`<p class="ok">${esc(STATE.message)}</p>`);
+  if(scene) parts.push(markdownToHtml(scene.text));
+  const html = parts.join("\n");
+  typewrite ? typewriter(els.narrative, html) : (els.narrative.innerHTML = html);
+  // Choices
+  renderChoices(scene);
+  // Command suggestions
+  renderCmdList(scene);
+  // Map
+  drawMiniMap();
+}
+function renderInventory(){
+  els.invList.innerHTML = "";
+  if(!STATE.inventory.length){ els.invList.innerHTML = `<span class="muted">Empty</span>`; return; }
+  STATE.inventory.forEach(item=>{
+    const span = document.createElement("span"); span.className="pill"; span.textContent=item; els.invList.appendChild(span);
+  });
+}
+function renderChoices(scene){
+  els.choices.innerHTML = "";
+  if(!scene) return;
+  const filtered = (scene.choices||[]).filter(ch=>{
+    if(ch.needsFlag && !STATE.flags[ch.needsFlag]) return false;
+    if(ch.notFlag && STATE.flags[ch.notFlag]) return false;
+    if(ch.needsItem && !STATE.inventory.includes(ch.needsItem)) return false;
+    return true;
+  });
+  filtered.forEach((ch,idx)=>{
+    const btn = document.createElement("button");
+    btn.className="choice";
+    btn.setAttribute("aria-label", ch.text);
+    btn.dataset.index = idx;
+    btn.dataset.selected = String(idx===STATE.choiceIndex);
+    btn.textContent = ch.text;
+    btn.addEventListener("click", ()=> activateChoice(ch));
+    els.choices.appendChild(btn);
+  });
+  // Keep a focus ring on selected
+  updateChoiceSelection();
+}
+function updateChoiceSelection(){
+  const btns = $$("#choices .choice");
+  btns.forEach((b, i)=> b.dataset.selected = String(i===STATE.choiceIndex));
+  const sel = btns[STATE.choiceIndex]; if(sel) sel.scrollIntoView({block:"nearest", inline:"nearest"});
+}
+function activateChoice(ch){
+  // Apply side effects
+  if(ch.itemGained && !STATE.inventory.includes(ch.itemGained)) STATE.inventory.push(ch.itemGained);
+  if(ch.itemLost) removeItem(STATE, ch.itemLost);
+  if(ch.setsFlag) STATE.flags[ch.setsFlag] = true;
+  if(ch.clearsFlag) STATE.flags[ch.clearsFlag] = false;
+  if(ch.statChange){
+    if(typeof ch.statChange.health === "number") STATE.stats.health = Math.max(0, STATE.stats.health + ch.statChange.health);
+    if(typeof ch.statChange.mind === "number") STATE.stats.mind = Math.max(0, STATE.stats.mind + ch.statChange.mind);
+  }
+  if(ch.end){ endGame(ch.end); return; }
+  if(ch.goto){ gotoScene(ch.goto); }
+}
+function submitCommand(){
+  const raw = (els.cmd.value||"").trim().toLowerCase();
+  els.cmd.value="";
+  if(!raw){ announce("Type a command."); return; }
+  handleCommand(raw);
+}
+function handleCommand(cmd){
+  const scene = getScene(STATE.currentSceneId);
+  // Synonyms
+  cmd = normalizeVerb(cmd);
+  // Built-ins
+  if(cmd==="inventory" || cmd==="inv"){ toggleInventory(); return; }
+  if(cmd==="help"){ toggleSection(els.howto); return; }
+  if(cmd.startsWith("look") || cmd.startsWith("examine") || cmd.startsWith("inspect")){
+    STATE.message = describeScene(scene);
+    renderUI(); return;
+  }
+  // Scene-specific
+  const res = scene?.onCommand?.(cmd, STATE);
+  if(res && res.type==="goto") { gotoScene(res.id, res.message); return; }
+  if(res && res.type==="stay") { renderUI(); return; }
+
+  // General TAKE / USE / TALK handlers
+  if(startsWith(cmd,"take")){
+    const target = cmd.replace("take","").trim();
+    const found = takeInScene(target, scene);
+    STATE.message = found || "Your fingers close on fog.";
+    renderUI(); return;
+  }
+  if(startsWith(cmd,"use")){
+    const item = cmd.replace("use","").trim();
+    const out = useItem(item, scene);
+    STATE.message = out;
+    renderUI(); return;
+  }
+  if(cmd.startsWith("talk")){
+    STATE.message = talkHere(scene);
+    renderUI(); return;
+  }
+  // Unknown — friendly hint
+  STATE.message = `The fog doesn't understand "${esc(cmd)}". Try <em>look</em>, <em>take</em>, <em>use</em>, or choose a button.`;
+  renderUI();
+}
+
+/* ---------- Command Helpers ---------- */
+function normalizeVerb(cmd){
+  return cmd
+    .replace(/^(examine|inspect)\b/,"look")
+    .replace(/^(grab|pick up)\b/,"take")
+    .replace(/\s+/g," ")
+    .trim();
+}
+function describeScene(scene){
+  const items = [];
+  if(scene.id==="alley" && !STATE.inventory.includes("Rusty Key")) items.push("a <strong>key</strong> under canvas");
+  if(scene.id==="square" && !STATE.inventory.includes("Old Coin")) items.push("an <strong>old coin</strong> in the basin");
+  if(scene.id==="warehouse" && !STATE.inventory.includes("Lantern")) items.push("the <strong>Lantern</strong> on a plinth");
+  if(items.length) return "You notice: " + items.join(", ") + ".";
+  return "Nothing new catches your eye.";
+}
+function takeInScene(target, scene){
+  if((target.includes("key") || target=="key") && scene.id.startsWith("alley")){
+    if(STATE.inventory.includes("Rusty Key")) return "You already pocketed the key.";
+    STATE.inventory.push("Rusty Key"); STATE.flags.tookKey=true; return "You pocket the Rusty Key.";
+  }
+  if(target.includes("coin") && scene.id.startsWith("square")){
+    if(STATE.inventory.includes("Old Coin")) return "You already have the Old Coin.";
+    STATE.inventory.push("Old Coin"); STATE.flags.tookCoin=true; return "You fish out the Old Coin.";
+  }
+  if(target.includes("lantern") && scene.id==="warehouse"){
+    if(STATE.inventory.includes("Lantern")) return "It's already in your hands.";
+    STATE.inventory.push("Lantern"); STATE.flags.hasLantern=true; return "The Lantern shivers as you lift it.";
+  }
+  return null;
+}
+function useItem(item, scene){
+  const name = item.replace(/^the\s+/,"").trim();
+  if(!name) return "Use what?";
+  // key usage
+  if(name.includes("key")){
+    if(!STATE.inventory.includes("Rusty Key")) return "You don't have a key.";
+    if(scene.id==="warehouseDoor" || scene.id==="pad"){
+      STATE.flags.openedWarehouse = true; return "The chain loosens; the keypad wakes.";
+    }
+    return "No lock here wants this key.";
+  }
+  if(name.includes("lantern")){
+    if(!STATE.inventory.includes("Lantern")) return "You don't hold the Lantern.";
+    STATE.stats.mind = Math.min(12, STATE.stats.mind+1);
+    return "You lift the Lantern. Warmth answers (+1 Mind).";
+  }
+  if(name.includes("coin")){
+    if(scene.id==="market"){
+      if(STATE.inventory.includes("Old Coin")){
+        STATE.flags.learnedCode = true; removeItem(STATE,"Old Coin");
+        return "You trade the coin. Whispered code: 3-1-4.";
+      }
+      return "Your pockets produce only lint.";
+    }
+    return "You flip the coin. It lands on edge in your thoughts.";
+  }
+  return "That doesn't seem useful here.";
+}
+function talkHere(scene){
+  if(scene.id==="dock" || scene.id.startsWith("keeper")){
+    STATE.flags.talkedToKeeper = true; return "The Keeper speaks in tide and riddle. He wants the Lantern found.";
+  }
+  if(scene.id==="market") return "Trader: \"Old coins for old codes.\"";
+  return "You mutter into fog. It doesn't answer.";
+}
+function removeItem(state, item){
+  const i = state.inventory.indexOf(item); if(i>=0) state.inventory.splice(i,1);
+}
+
+/* ---------- Typewriter ---------- */
+function typewriter(el, html){
+  if(twTimer) cancelAnimationFrame(twTimer);
+  // strip tags for progressive reveal; reveal text content while keeping basic paragraphs
+  const temp = document.createElement("div"); temp.innerHTML=html;
+  const text = temp.textContent || "";
+  let i=0; el.innerHTML=""; const p = document.createElement("div"); p.className="typewriter"; el.appendChild(p);
+  const cursor = '<span class="cursor" aria-hidden="true"></span>';
+  function step(){
+    i += Math.max(1, Math.floor(text.length/500)); // speed adaptive
+    p.innerHTML = esc(text.slice(0,i)) + cursor;
+    if(i<text.length) twTimer = requestAnimationFrame(step);
+    else p.innerHTML = html; // at end, put real markup back
+  }
+  // allow click to skip
+  el.onclick = ()=>{ if(twTimer){ cancelAnimationFrame(twTimer); twTimer=null; el.innerHTML=html; } };
+  step();
+}
+
+/* ---------- Map Rendering ---------- */
+const ctx = els.map.getContext("2d");
+let particles = Array.from({length:40}, ()=>({
+  x:Math.random()*els.map.width, y:Math.random()*els.map.height, v:(.3+Math.random()*1.2)
+}));
+function startMapLoop(){ requestAnimationFrame(loop); }
+function loop(){
+  drawMiniMap();
+  requestAnimationFrame(loop);
+}
+function drawMiniMap(){
+  const w=els.map.width, h=els.map.height;
+  ctx.clearRect(0,0,w,h);
+  // background
+  ctx.fillStyle="#0b1320"; ctx.fillRect(0,0,w,h);
+  // grid
+  ctx.strokeStyle="#1c2740"; ctx.lineWidth=1;
+  for(let x=0;x<=w;x+=24){ line(x,0,x,h); }
+  for(let y=0;y<=h;y+=16){ line(0,y,w,y); }
+  // rooms
+  SCENES.forEach(sc=>{
+    if(!sc.map) return;
+    const px = sc.map.x*40+40, py = sc.map.y*28+20;
+    const discovered = !!STATE.discovered[sc.id];
+    ctx.fillStyle = discovered ? "rgba(88,166,255,.22)" : "rgba(88,166,255,.06)";
+    ctx.strokeStyle = discovered ? "rgba(88,166,255,.5)" : "rgba(88,166,255,.2)";
+    ctx.beginPath(); ctx.rect(px-10, py-7, 20, 14); ctx.fill(); ctx.stroke();
+  });
+  // current room glow + silhouette
+  const curr = getScene(STATE.currentSceneId);
+  if(curr?.map){
+    const cx = curr.map.x*40+40, cy = curr.map.y*28+20;
+    glow(cx,cy, 24, "rgba(255,214,10,.15)");
+    ctx.fillStyle="#ffd60a"; ctx.beginPath(); ctx.arc(cx,cy,3,0,Math.PI*2); ctx.fill();
+    drawSilhouette(curr.artHint, cx, cy);
+  }
+  // ambient particles (rain/fog)
+  particles.forEach(p=>{
+    ctx.fillStyle="rgba(126,231,135,.06)";
+    ctx.fillRect(p.x, p.y, 1, 4);
+    p.y += p.v; if(p.y>h) { p.y = -4; p.x = Math.random()*w; }
+  });
+}
+function drawSilhouette(hint, x, y){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.strokeStyle="rgba(255,255,255,.35)"; ctx.lineWidth=1;
+  if(hint==="lantern"){
+    ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-6,-2); ctx.quadraticCurveTo(0,-10,6,-2); ctx.stroke();
+  } else if(hint==="key"){
+    ctx.beginPath(); ctx.arc(-2,0,4,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(2,0); ctx.lineTo(10,0); ctx.lineTo(10,2); ctx.moveTo(8,0); ctx.lineTo(8,3); ctx.stroke();
+  } else if(hint==="fountain"){
+    ctx.beginPath(); ctx.arc(0,4,9,Math.PI,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-5,3); ctx.quadraticCurveTo(0,-4,5,3); ctx.stroke();
+  } else if(hint==="shop"){
+    ctx.beginPath(); ctx.rect(-10,-6,20,12); ctx.moveTo(-10,-2); ctx.lineTo(10,-2); ctx.stroke();
+  } else if(hint==="door" || hint==="numbers"){
+    ctx.beginPath(); ctx.rect(-8,-6,16,12); ctx.stroke();
+    if(hint==="numbers"){ ctx.font="6px system-ui"; ctx.fillStyle="rgba(255,255,255,.6)"; ctx.fillText("3 1 4",-7,2); }
+  } else if(hint==="dock"){
+    ctx.beginPath(); ctx.moveTo(-12,6); ctx.lineTo(12,6); ctx.moveTo(-8,2); ctx.lineTo(-8,6); ctx.moveTo(0,2); ctx.lineTo(0,6); ctx.moveTo(8,2); ctx.lineTo(8,6); ctx.stroke();
+  } else if(hint==="cliff"){
+    ctx.beginPath(); ctx.moveTo(-12,6); ctx.lineTo(-8,2); ctx.lineTo(-2,0); ctx.lineTo(6,-4); ctx.lineTo(12,-6); ctx.stroke();
+  } else if(hint==="shards"){
+    for(let i=0;i<5;i++){ ctx.beginPath(); ctx.moveTo(-8+i*4, -3-Math.random()*3); ctx.lineTo(-6+i*4, 3+Math.random()*3); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+function line(x1,y1,x2,y2){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
+function glow(x,y,r,color){
+  const g = ctx.createRadialGradient(x,y,1,x,y,r);
+  g.addColorStop(0,color); g.addColorStop(1,"transparent");
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+}
+
+/* ---------- Keyboard Navigation ---------- */
+function onKey(e){
+  // Global shortcuts even on start screen
+  if(e.key==="H" || e.key==="h"){ toggleSection(els.howto); return; }
+  if(els.game.hidden) return;
+  if(e.key==="I" || e.key==="i"){ toggleInventory(); e.preventDefault(); return; }
+  if(e.key==="M" || e.key==="m"){ els.map.focus?.(); e.preventDefault(); return; }
+  if(e.key==="ArrowDown"){
+    changeChoice(1); e.preventDefault(); return;
+  }
+  if(e.key==="ArrowUp"){
+    changeChoice(-1); e.preventDefault(); return;
+  }
+  if(e.key==="Enter"){
+    const btn = $$("#choices .choice")[STATE.choiceIndex];
+    if(document.activeElement===els.cmd){ submitCommand(); return; }
+    btn?.click(); e.preventDefault(); return;
+  }
+}
+function changeChoice(d){
+  const total = $$("#choices .choice").length;
+  if(!total) return;
+  STATE.choiceIndex = (STATE.choiceIndex + d + total) % total;
+  updateChoiceSelection();
+}
+
+/* ---------- Utilities ---------- */
+function getScene(id){ return SCENES.find(s=>s.id===id); }
+function matches(cmd, arr){ cmd = cmd.trim().toLowerCase(); return arr.includes(cmd); }
+function startsWith(cmd, v){ return cmd.startsWith(v); }
+function esc(s){ return (""+s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function markdownToHtml(md){
+  // very tiny markdown: _italics_, **bold**
+  return "<p>"+esc(md).replace(/(^|\s)\*(\*?)(.+?)\*(\2)/g,"$1<strong>$3</strong>").replace(/(^|[\s_])_([^_]+)_/g,"$1<em>$2</em>")+"</p>";
+}
+function safeParse(j){ try{return JSON.parse(j)}catch{return null} }
+function announce(msg){ // small toast message in narrative
+  STATE.message = msg; renderUI();
+}
+
+/* ---------- Command Suggest (datalist) ---------- */
+function renderCmdList(scene){
+  const verbs = ["look","take","use","talk","open","inventory","help"];
+  const nouns = ["key","coin","lantern","keeper","door","pad","trader","code 314"];
+  const specials = [];
+  if(scene?.id==="pad") specials.push("enter 314");
+  const list = [...verbs, ...nouns, ...specials].filter((v,i,a)=>a.indexOf(v)===i);
+  els.cmdList.innerHTML = list.map(v=> `<option value="${esc(v)}">`).join("");
+}
+
+/* ---------- Flow Helpers ---------- */
+function go(id,state,message){ return {type:"goto", id, message} }
+function stay(){ return {type:"stay"} }
+
+/* ---------- Start ---------- */
+init();
+</script>
+</body>
+</html>
