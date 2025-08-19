@@ -1,0 +1,596 @@
+
+<!-- Copyright (c) 2025 IRAKLI IVANISHVILI Aura Weaver -->
+<!-- All rights reserved. Unauthorized use is prohibited. See LICENSE file for details. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Weaver</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@300;400;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', monospace;
+            background: radial-gradient(ellipse at center, #1a0033 0%, #000011 70%, #000000 100%);
+            overflow: hidden;
+            cursor: none;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .score-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #ffffff;
+            text-align: right;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .score {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .lives {
+            font-size: 16px;
+            font-weight: 300;
+        }
+
+        .target-color {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .combo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .game-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffffff;
+            text-align: center;
+            font-size: 28px;
+            font-weight: 400;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+        }
+
+        .countdown {
+            font-size: 72px;
+            font-weight: 700;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            font-size: 16px;
+            font-weight: 300;
+            opacity: 0.8;
+        }
+
+        .heart {
+            display: inline-block;
+            margin: 0 2px;
+            color: #ff6b9d;
+            text-shadow: 0 0 8px rgba(255, 107, 157, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <button onclick="window.location.href='../index.html'" style="position: absolute; top: 20px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
+    ⬅ Main Menu
+  </button>
+
+    <canvas id="gameCanvas"></canvas>
+    <div class="ui-overlay">
+        <div class="score-display">
+            <div class="score" id="score">0</div>
+            <div class="lives" id="lives">
+                <span class="heart">♥</span>
+                <span class="heart">♥</span>
+                <span class="heart">♥</span>
+            </div>
+        </div>
+        <div class="target-color" id="targetColor">Collect Cyan</div>
+        <div class="combo" id="combo"></div>
+        <div class="game-message" id="gameMessage">
+            <div class="countdown" id="countdown">3</div>
+            <div class="instructions">Move your mouse to control the aura<br>Collect particles of the target color</div>
+        </div>
+    </div>
+
+    <script>
+        class AuraWeaver {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.resizeCanvas();
+
+                // Game state
+                this.gameState = 'starting';
+                this.score = 0;
+                this.lives = 3;
+                this.combo = 0;
+                this.comboDisplayTime = 0;
+
+                // Colors
+                this.colors = {
+                    cyan: '#00ffff',
+                    magenta: '#ff00ff',
+                    yellow: '#ffff00',
+                    white: '#ffffff'
+                };
+                this.colorNames = Object.keys(this.colors);
+                this.targetColor = 'cyan';
+                this.targetColorIndex = 0;
+
+                // Player
+                this.playerX = this.canvas.width / 2;
+                this.playerY = this.canvas.height / 2;
+                this.mouseX = this.playerX;
+                this.mouseY = this.playerY;
+                this.auraLength = 500;
+
+                // Particles
+                this.particles = [];
+                this.maxParticles = 12;
+                this.spawnRate = 0.05;
+
+                // Background stars
+                this.stars = [];
+                this.generateStars();
+
+                // Animation
+                this.time = 0;
+                this.countdownTime = 0;
+                this.countdownValue = 3;
+
+                // UI elements
+                this.scoreEl = document.getElementById('score');
+                this.livesEl = document.getElementById('lives');
+                this.targetColorEl = document.getElementById('targetColor');
+                this.comboEl = document.getElementById('combo');
+                this.gameMessageEl = document.getElementById('gameMessage');
+                this.countdownEl = document.getElementById('countdown');
+
+                this.setupEventListeners();
+                this.startCountdown();
+                this.gameLoop();
+            }
+
+            resizeCanvas() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.playerX = this.canvas.width / 2;
+                this.playerY = this.canvas.height / 2;
+            }
+
+            generateStars() {
+                this.stars = [];
+                for (let i = 0; i < 200; i++) {
+                    this.stars.push({
+                        x: Math.random() * this.canvas.width,
+                        y: Math.random() * this.canvas.height,
+                        size: Math.random() * 2 + 0.5,
+                        opacity: Math.random() * 0.8 + 0.2,
+                        twinkleSpeed: Math.random() * 0.02 + 0.01
+                    });
+                }
+            }
+
+            setupEventListeners() {
+                window.addEventListener('resize', () => this.resizeCanvas());
+                document.addEventListener('mousemove', (e) => {
+                    this.mouseX = e.clientX;
+                    this.mouseY = e.clientY;
+                });
+            }
+
+            startCountdown() {
+                this.gameState = 'countdown';
+                this.countdownTime = 0;
+                this.countdownValue = 3;
+                this.gameMessageEl.style.display = 'block';
+            }
+
+            startGame() {
+                this.gameState = 'playing';
+                this.gameMessageEl.style.display = 'none';
+                this.changeTargetColor();
+            }
+
+            gameOver() {
+                this.gameState = 'gameOver';
+                this.gameMessageEl.style.display = 'block';
+                this.gameMessageEl.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 20px;">Game Over</div>
+                    <div style="font-size: 32px; margin-bottom: 10px;">Final Score: ${this.score}</div>
+                    <div style="font-size: 16px; opacity: 0.8;">Refresh to play again</div>
+                `;
+            }
+
+            changeTargetColor() {
+                this.targetColorIndex = Math.floor(Math.random() * this.colorNames.length);
+                this.targetColor = this.colorNames[this.targetColorIndex];
+                this.targetColorEl.textContent = `Collect ${this.targetColor.charAt(0).toUpperCase() + this.targetColor.slice(1)}`;
+                this.targetColorEl.style.color = this.colors[this.targetColor];
+            }
+
+            spawnParticle() {
+                if (this.particles.length >= this.maxParticles) return;
+
+                const side = Math.floor(Math.random() * 4);
+                let x, y, vx, vy;
+
+                switch (side) {
+                    case 0: // Top
+                        x = Math.random() * this.canvas.width;
+                        y = -20;
+                        vx = (Math.random() - 0.5) * 1.0;
+                        vy = Math.random() * 1.0 + 0.5;
+                        if (x > this.canvas.width / 2) vx -= 0.1;
+                        else vx += 0.1;
+                        break;
+                    case 1: // Right
+                        x = this.canvas.width + 20;
+                        y = Math.random() * this.canvas.height;
+                        vx = -(Math.random() * 1.0 + 0.5);
+                        vy = (Math.random() - 0.5) * 1.0;
+                        if (y > this.canvas.height / 2) vy -= 0.1;
+                        else vy += 0.1;
+                        break;
+                    case 2: // Bottom
+                        x = Math.random() * this.canvas.width;
+                        y = this.canvas.height + 20;
+                        vx = (Math.random() - 0.5) * 1.0;
+                        vy = -(Math.random() * 1.0 + 0.5);
+                        if (x > this.canvas.width / 2) vx -= 0.1;
+                        else vx += 0.1;
+                        break;
+                    case 3: // Left
+                        x = -20;
+                        y = Math.random() * this.canvas.height;
+                        vx = Math.random() * 1.0 + 0.5;
+                        vy = (Math.random() - 0.5) * 1.0;
+                        if (y > this.canvas.height / 2) vy -= 0.1;
+                        else vy += 0.1;
+                        break;
+                }
+
+                const colorName = this.colorNames[Math.floor(Math.random() * this.colorNames.length)];
+                const particle = {
+                    x: x,
+                    y: y,
+                    vx: vx,
+                    vy: vy,
+                    color: this.colors[colorName],
+                    colorName: colorName,
+                    size: Math.random() * 8 + 6,
+                    pulse: Math.random() * Math.PI * 2,
+                    life: 1.0
+                };
+
+                this.particles.push(particle);
+            }
+
+            updateParticles() {
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const particle = this.particles[i];
+
+                    // Add gentle attraction to center
+                    const dx = this.playerX - particle.x;
+                    const dy = this.playerY - particle.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 0) {
+                        particle.vx += (dx / dist) * 0.02;
+                        particle.vy += (dy / dist) * 0.02;
+                    }
+
+                    // Update position with reduced random change
+                    particle.vx += (Math.random() - 0.5) * 0.02;
+                    particle.vy += (Math.random() - 0.5) * 0.02;
+                    particle.vx *= 0.97;
+                    particle.vy *= 0.97;
+
+                    particle.x += particle.vx;
+                    particle.y += particle.vy;
+                    particle.pulse += 0.05;
+
+                    // Remove particles that go off screen
+                    if (particle.x < -50 || particle.x > this.canvas.width + 50 ||
+                        particle.y < -50 || particle.y > this.canvas.height + 50) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+            }
+
+            checkCollisions() {
+                const distance = this.getDistance(this.playerX, this.playerY, this.mouseX, this.mouseY);
+                const normalizedDistance = Math.min(distance, this.auraLength);
+                const auraEndX = this.playerX + (this.mouseX - this.playerX) * (normalizedDistance / Math.max(distance, 1));
+                const auraEndY = this.playerY + (this.mouseY - this.playerY) * (normalizedDistance / Math.max(distance, 1));
+
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const particle = this.particles[i];
+
+                    const distanceToAura = this.getDistanceToLine(
+                        this.playerX, this.playerY,
+                        auraEndX, auraEndY,
+                        particle.x, particle.y
+                    );
+
+                    if (distanceToAura < particle.size / 2 + 30) {
+                        if (particle.colorName === this.targetColor) {
+                            this.combo++;
+                            this.score += 10 * this.combo;
+                            this.updateScore();
+                            this.showCombo();
+
+                            // Add an extra life, capped at 3
+                            if (this.lives < 3) {
+                                this.lives++;
+                                this.updateLives();
+                            }
+                        } else {
+                            this.lives--;
+                            this.combo = 0;
+                            this.updateLives();
+                            if (this.lives <= 0) {
+                                this.gameOver();
+                            }
+                        }
+
+                        this.particles.splice(i, 1);
+
+                        if (Math.random() < 0.3) {
+                            this.changeTargetColor();
+                        }
+                    }
+                }
+            }
+
+            getDistance(x1, y1, x2, y2) {
+                return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+            }
+
+            getDistanceToLine(x1, y1, x2, y2, px, py) {
+                const A = px - x1;
+                const B = py - y1;
+                const C = x2 - x1;
+                const D = y2 - y1;
+
+                const dot = A * C + B * D;
+                const lenSq = C * C + D * D;
+                let param = -1;
+                if (lenSq !== 0) param = dot / lenSq;
+
+                let xx, yy;
+                if (param < 0) {
+                    xx = x1;
+                    yy = y1;
+                } else if (param > 1) {
+                    xx = x2;
+                    yy = y2;
+                } else {
+                    xx = x1 + param * C;
+                    yy = y1 + param * D;
+                }
+
+                const dx = px - xx;
+                const dy = py - yy;
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            updateScore() {
+                this.scoreEl.textContent = this.score;
+            }
+
+            updateLives() {
+                let heartsHtml = '';
+                for (let i = 0; i < 3; i++) {
+                    if (i < this.lives) {
+                        heartsHtml += '<span class="heart">♥</span>';
+                    } else {
+                        heartsHtml += '<span class="heart" style="opacity: 0.2;">♥</span>';
+                    }
+                }
+                this.livesEl.innerHTML = heartsHtml;
+            }
+
+            showCombo() {
+                if (this.combo > 1) {
+                    this.comboEl.textContent = `${this.combo}x COMBO!`;
+                    this.comboEl.style.opacity = '1';
+                    this.comboDisplayTime = 60;
+                }
+            }
+
+            draw() {
+                this.ctx.fillStyle = 'rgba(0, 0, 17, 0.1)';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.drawStars();
+
+                if (this.gameState === 'playing') {
+                    this.drawAura();
+                    this.drawPlayer();
+                }
+
+                this.drawParticles();
+
+                if (this.comboDisplayTime > 0) {
+                    this.comboDisplayTime--;
+                    if (this.comboDisplayTime === 0) {
+                        this.comboEl.style.opacity = '0';
+                    }
+                }
+            }
+
+            drawStars() {
+                for (const star of this.stars) {
+                    const twinkle = Math.sin(this.time * star.twinkleSpeed) * 0.3 + 0.7;
+                    this.ctx.save();
+                    this.ctx.globalAlpha = star.opacity * twinkle;
+                    this.ctx.fillStyle = '#ffffff';
+                    this.ctx.beginPath();
+                    this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
+            }
+
+            drawPlayer() {
+                const pulse = Math.sin(this.time * 0.02) * 0.2 + 0.8;
+
+                this.ctx.save();
+                this.ctx.globalAlpha = 0.3;
+                this.ctx.fillStyle = this.colors[this.targetColor];
+                this.ctx.beginPath();
+                this.ctx.arc(this.playerX, this.playerY, 30 * pulse, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+
+                this.ctx.save();
+                this.ctx.fillStyle = this.colors[this.targetColor];
+                this.ctx.shadowBlur = 20;
+                this.ctx.shadowColor = this.colors[this.targetColor];
+                this.ctx.beginPath();
+                this.ctx.arc(this.playerX, this.playerY, 12 * pulse, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+            }
+
+            drawAura() {
+                const distance = this.getDistance(this.playerX, this.playerY, this.mouseX, this.mouseY);
+                const normalizedDistance = Math.min(distance, this.auraLength);
+                const endX = this.playerX + (this.mouseX - this.playerX) * (normalizedDistance / distance || 1);
+                const endY = this.playerY + (this.mouseY - this.playerY) * (normalizedDistance / distance || 1);
+
+                const gradient = this.ctx.createLinearGradient(this.playerX, this.playerY, endX, endY);
+                gradient.addColorStop(0, this.colors[this.targetColor] + '80');
+                gradient.addColorStop(1, this.colors[this.targetColor] + '20');
+
+                this.ctx.save();
+                this.ctx.strokeStyle = gradient;
+                this.ctx.lineWidth = 8;
+                this.ctx.lineCap = 'round';
+                this.ctx.shadowBlur = 15;
+                this.ctx.shadowColor = this.colors[this.targetColor];
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.playerX, this.playerY);
+                this.ctx.lineTo(endX, endY);
+                this.ctx.stroke();
+                this.ctx.restore();
+
+                this.ctx.save();
+                this.ctx.fillStyle = this.colors[this.targetColor] + '60';
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = this.colors[this.targetColor];
+                this.ctx.beginPath();
+                this.ctx.arc(endX, endY, 8, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+            }
+
+            drawParticles() {
+                for (const particle of this.particles) {
+                    const pulse = Math.sin(particle.pulse) * 0.3 + 0.7;
+
+                    this.ctx.save();
+                    this.ctx.globalAlpha = 0.3 * pulse;
+                    this.ctx.fillStyle = particle.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(particle.x, particle.y, particle.size * 1.5, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+
+                    this.ctx.save();
+                    this.ctx.globalAlpha = 0.8 * pulse;
+                    this.ctx.fillStyle = particle.color;
+                    this.ctx.shadowBlur = 10;
+                    this.ctx.shadowColor = particle.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(particle.x, particle.y, particle.size / 2, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
+            }
+
+            update() {
+                this.time++;
+
+                if (this.gameState === 'countdown') {
+                    this.countdownTime++;
+                    if (this.countdownTime >= 60) {
+                        this.countdownTime = 0;
+                        this.countdownValue--;
+                        if (this.countdownValue > 0) {
+                            this.countdownEl.textContent = this.countdownValue;
+                        } else {
+                            this.startGame();
+                        }
+                    }
+                } else if (this.gameState === 'playing') {
+                    if (Math.random() < this.spawnRate) {
+                        this.spawnParticle();
+                    }
+
+                    this.updateParticles();
+
+                    this.checkCollisions();
+                }
+            }
+
+            gameLoop() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.gameLoop());
+            }
+        }
+
+        window.addEventListener('load', () => {
+            new AuraWeaver();
+        });
+    </script>
+</body>
+</html>
