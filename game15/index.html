@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Adventure + Sounds</title>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: #222; color: #fff; font-family: Arial, sans-serif; }
+        #game { position: relative; }
+        canvas { border: 2px solid #fff; background: #000; }
+        #score { position: absolute; top: 10px; left: 10px; font-size: 20px; }
+        #level { position: absolute; top: 10px; right: 10px; font-size: 20px; }
+        #game-over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; }
+        #game-over h1 { font-size: 40px; margin: 0; }
+        #game-over p { font-size: 20px; }
+        button { padding: 10px 20px; font-size: 18px; background: #4CAF50; border: none; color: white; cursor: pointer; }
+        button:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+    <button onclick="location.href='../index.html'">⬅ Main Menu</button>
+    <div id="game">
+        <canvas id="canvas" width="400" height="400"></canvas>
+        <div id="score">Score: 0</div>
+        <div id="level">Level: 1</div>
+        <div id="game-over">
+            <h1>Game Over!</h1>
+            <p>Your Score: <span id="final-score"></span></p>
+            <button onclick="restartGame()">Restart</button>
+        </div>
+    </div>
+
+    <script>
+        // Простые звуковые эффекты через Web Audio API (без внешних файлов)
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playBeep(freq = 800, duration = 0.08, type = 'square') {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = type;
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playEat() {
+            playBeep(1200, 0.07, 'sawtooth');
+            setTimeout(() => playBeep(1600, 0.06, 'sawtooth'), 40);
+        }
+
+        function playBonus() {
+            playBeep(900, 0.08, 'triangle');
+            setTimeout(() => playBeep(1100, 0.08, 'triangle'), 60);
+            setTimeout(() => playBeep(1400, 0.10, 'triangle'), 120);
+        }
+
+        function playGameOver() {
+            playBeep(400, 0.25, 'sawtooth');
+            setTimeout(() => playBeep(300, 0.30, 'sawtooth'), 180);
+            setTimeout(() => playBeep(200, 0.40, 'sawtooth'), 400);
+        }
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const grid = 20;
+        const cols = canvas.width / grid;
+        const rows = canvas.height / grid;
+
+        let snake = [{ x: 10, y: 10 }];
+        let food = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+        let bonus = null;
+        let velocity = { x: 0, y: 0 };
+        let score = 0;
+        let level = 1;
+        let speed = 100;
+        let gameInterval;
+        let isGameOver = false;
+
+        function drawSnake() {
+            ctx.fillStyle = '#0f0';
+            snake.forEach(part => {
+                ctx.fillRect(part.x * grid, part.y * grid, grid - 2, grid - 2);
+                ctx.strokeStyle = '#00f';
+                ctx.strokeRect(part.x * grid, part.y * grid, grid - 2, grid - 2);
+            });
+        }
+
+        function drawFood() {
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.arc(food.x * grid + grid / 2, food.y * grid + grid / 2, grid / 2 - 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawBonus() {
+            if (bonus) {
+                ctx.fillStyle = '#ff0';
+                ctx.fillRect(bonus.x * grid, bonus.y * grid, grid - 2, grid - 2);
+                ctx.strokeStyle = '#f0f';
+                ctx.strokeRect(bonus.x * grid, bonus.y * grid, grid - 2, grid - 2);
+            }
+        }
+
+        function update() {
+            if (isGameOver) return;
+
+            const head = { x: snake[0].x + velocity.x, y: snake[0].y + velocity.y };
+
+            // Проверка на столкновение со стеной или собой
+            if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows ||
+                snake.some((part, i) => i > 0 && part.x === head.x && part.y === head.y)) {
+                playGameOver();
+                endGame();
+                return;
+            }
+
+            snake.unshift(head);
+
+            let ate = false;
+
+            if (head.x === food.x && head.y === food.y) {
+                score += 10;
+                playEat();
+                food = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+                ate = true;
+
+                if (Math.random() < 0.25) {
+                    bonus = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+                    setTimeout(() => { if (bonus) bonus = null; }, 6000);
+                }
+            } else if (bonus && head.x === bonus.x && head.y === bonus.y) {
+                score += 50;
+                playBonus();
+                bonus = null;
+                ate = true;
+            }
+
+            if (!ate) {
+                snake.pop();
+            } else {
+                level = Math.floor(score / 50) + 1;
+                speed = Math.max(50, 100 - (level - 1) * 8);
+                clearInterval(gameInterval);
+                gameInterval = setInterval(update, speed);
+            }
+
+            document.getElementById('score').textContent = `Score: ${score}`;
+            document.getElementById('level').textContent = `Level: ${level}`;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawSnake();
+            drawFood();
+            drawBonus();
+        }
+
+        function endGame() {
+            isGameOver = true;
+            clearInterval(gameInterval);
+            document.getElementById('final-score').textContent = score;
+            document.getElementById('game-over').style.display = 'block';
+        }
+
+        function restartGame() {
+            snake = [{ x: 10, y: 10 }];
+            food = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+            bonus = null;
+            velocity = { x: 0, y: 0 };
+            score = 0;
+            level = 1;
+            speed = 100;
+            isGameOver = false;
+            document.getElementById('game-over').style.display = 'none';
+            startGame();
+        }
+
+        function startGame() {
+            clearInterval(gameInterval);
+            gameInterval = setInterval(update, speed);
+        }
+
+        document.addEventListener('keydown', e => {
+            if (isGameOver) return;
+
+            if (e.key === 'ArrowUp'    && velocity.y === 0) velocity = { x: 0, y: -1 };
+            if (e.key === 'ArrowDown'  && velocity.y === 0) velocity = { x: 0, y:  1 };
+            if (e.key === 'ArrowLeft'  && velocity.x === 0) velocity = { x: -1, y: 0 };
+            if (e.key === 'ArrowRight' && velocity.x === 0) velocity = { x:  1, y: 0 };
+        });
+
+        // Старт игры
+        startGame();
+    </script>
+</body>
+</html>
