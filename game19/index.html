@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Snake Evolution</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0a1a, #1a1a2e);
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(0, 255, 255, 0.2);
+        }
+        
+        #gameCanvas {
+            background-color: #0d0d1a;
+            display: block;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .ui-element {
+            background-color: rgba(20, 20, 40, 0.85);
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 0 15px rgba(0, 200, 255, 0.4);
+            border: 1px solid rgba(0, 200, 255, 0.3);
+            backdrop-filter: blur(5px);
+        }
+        
+        #score {
+            color: #00ffaa;
+            text-shadow: 0 0 10px rgba(0, 255, 170, 0.5);
+        }
+        
+        #highScore {
+            color: #ffaa00;
+            text-shadow: 0 0 10px rgba(255, 170, 0, 0.5);
+        }
+        
+        #level {
+            color: #aa00ff;
+            text-shadow: 0 0 10px rgba(170, 0, 255, 0.5);
+        }
+        
+        #length {
+            color: #00aaff;
+            text-shadow: 0 0 10px rgba(0, 170, 255, 0.5);
+        }
+        
+        #gameStart, #gameOver, #instructionsScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, rgba(10, 10, 30, 0.95), rgba(5, 5, 20, 0.98));
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            text-align: center;
+        }
+        
+        #gameOver, #instructionsScreen {
+            display: none;
+        }
+        
+        .title {
+            font-size: 56px;
+            margin-bottom: 20px;
+            text-align: center;
+            background: linear-gradient(90deg, #00ffaa, #00aaff, #aa00ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            font-size: 22px;
+            margin-bottom: 40px;
+            color: #aaccff;
+            text-align: center;
+            max-width: 80%;
+            line-height: 1.5;
+        }
+        
+        .instructions {
+            background-color: rgba(30, 30, 60, 0.8);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 40px;
+            max-width: 85%;
+            line-height: 1.6;
+            max-height: 320px;
+            overflow-y: auto;
+            border: 1px solid rgba(0, 200, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.3);
+        }
+        
+        .instructions h3 {
+            color: #00ffaa;
+            margin-bottom: 15px;
+            font-size: 24px;
+        }
+        
+        .instructions p {
+            margin-bottom: 12px;
+            color: #ccddff;
+        }
+        
+        .instructions ul {
+            padding-left: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 10px;
+            color: #ccddff;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #0066cc, #0044aa);
+            color: white;
+            border: none;
+            padding: 16px 45px;
+            font-size: 22px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.5);
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .button:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+        
+        .button:hover:before {
+            left: 100%;
+        }
+        
+        .button:hover {
+            background: linear-gradient(135deg, #0088ff, #0066cc);
+            transform: scale(1.08);
+            box-shadow: 0 0 30px rgba(0, 200, 255, 0.7);
+        }
+        
+        .button-secondary {
+            background: linear-gradient(135deg, #666, #444);
+            padding: 12px 30px;
+            font-size: 18px;
+        }
+        
+        .button-secondary:hover {
+            background: linear-gradient(135deg, #888, #666);
+        }
+        
+        #finalScore {
+            font-size: 42px;
+            color: #ffaa00;
+            margin: 25px 0;
+            text-shadow: 0 0 15px rgba(255, 170, 0, 0.7);
+        }
+        
+        .button-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .close-button {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background: rgba(255, 50, 50, 0.8);
+            color: white;
+            border: none;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            font-size: 28px;
+            cursor: pointer;
+            z-index: 20;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+            transition: all 0.3s;
+        }
+        
+        .close-button:hover {
+            background: rgba(255, 0, 0, 0.9);
+            transform: scale(1.1);
+        }
+        
+        .powerup-indicator {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(20, 20, 40, 0.85);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 16px;
+            box-shadow: 0 0 15px rgba(255, 100, 255, 0.4);
+            border: 1px solid rgba(255, 100, 255, 0.3);
+            display: none;
+            z-index: 5;
+        }
+        
+        .evolution-notification {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(20, 20, 40, 0.9);
+            padding: 20px 40px;
+            border-radius: 15px;
+            font-size: 28px;
+            box-shadow: 0 0 30px rgba(0, 255, 170, 0.6);
+            border: 2px solid rgba(0, 255, 170, 0.5);
+            display: none;
+            z-index: 8;
+            color: #00ffaa;
+            text-align: center;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.05); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        .grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 150, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 150, 255, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div class="grid"></div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="ui">
+            <div class="ui-element" id="score">Score: 0</div>
+            <div class="ui-element" id="highScore">High: 0</div>
+            <div class="ui-element" id="level">Level: 1</div>
+            <div class="ui-element" id="length">Length: 3</div>
+        </div>
+        
+        <div class="powerup-indicator" id="powerupIndicator"></div>
+        <div class="evolution-notification" id="evolutionNotification">EVOLUTION!</div>
+        
+        <div id="gameStart">
+            <h1 class="title">NEON SNAKE EVOLUTION</h1>
+            <p class="subtitle">Evolve your snake, collect power-ups, and dominate the neon grid!</p>
+            
+            <div class="instructions">
+                <h3>Quick Start:</h3>
+                <p>• Use ARROW KEYS or WASD to control your snake</p>
+                <p>• Collect food to grow longer and earn points</p>
+                <p>• Avoid walls and don't crash into yourself</p>
+                <p>• Collect power-ups for special abilities</p>
+                <p>• Evolve your snake every 5 levels for new abilities</p>
+                <p>• Speed increases every level - Can you keep up?</p>
+            </div>
+            
+            <div class="button-container">
+                <button class="button" id="startButton">START GAME</button>
+                <button class="button button-secondary" id="instructionsButton">INSTRUCTIONS</button>
+            </div>
+        </div>
+        
+        <div id="gameOver">
+            <h1 class="title">GAME OVER</h1>
+            <p class="subtitle">Your neon snake has met its end!</p>
+            <div id="finalScore">Score: 0</div>
+            <div class="button-container">
+                <button class="button" id="restartButton">PLAY AGAIN</button>
+                <button class="button button-secondary" id="menuButton" onclick="location.href='../index.html'">Main Menu</button>
+            </div>
+        </div>
+        
+        <div id="instructionsScreen">
+            <button class="close-button" id="closeInstructions">×</button>
+            <h1 class="title">GAME INSTRUCTIONS</h1>
+            
+            <div class="instructions">
+                <h3>Objective</h3>
+                <p>Control your neon snake to collect food, grow longer, and survive as long as possible. Evolve your snake to unlock new abilities and dominate the grid!</p>
+                
+                <h3>Controls</h3>
+                <ul>
+                    <li><strong>Arrow Keys:</strong> UP, DOWN, LEFT, RIGHT to control direction</li>
+                    <li><strong>WASD:</strong> Alternative controls (W=Up, A=Left, S=Down, D=Right)</li>
+                    <li><strong>P Key:</strong> Pause/Resume the game</li>
+                    <li><strong>Spacebar:</strong> Use active power-up (when available)</li>
+                </ul>
+                
+                <h3>Game Elements</h3>
+                <ul>
+                    <li><strong style="color: #00ffaa">Food:</strong> Green glowing orbs. Collect to grow longer and earn 10 points</li>
+                    <li><strong style="color: #ff5555">Super Food:</strong> Red pulsating orbs. Worth 50 points and makes you grow faster</li>
+                    <li><strong style="color: #ffaa00">Speed Boost:</strong> Orange stars. Temporarily increase your speed</li>
+                    <li><strong style="color: #aa00ff">Shield:</strong> Purple crystals. Gives temporary invincibility to walls</li>
+                    <li><strong style="color: #00aaff">Multiplier:</strong> Blue diamonds. Doubles points for 15 seconds</li>
+                </ul>
+                
+                <h3>Evolution System</h3>
+                <p>Every 5 levels, your snake evolves and gains new abilities:</p>
+                <ul>
+                    <li><strong>Level 5:</strong> Speed increase + ability to see power-up timers</li>
+                    <li><strong>Level 10:</strong> Chance to spawn super food + longer power-up duration</li>
+                    <li><strong>Level 15:</strong> Snake leaves a trail that damages food for extra points</li>
+                    <li><strong>Level 20:</strong> Temporary phase-through-walls ability</li>
+                    <li><strong>Level 25+:</strong> Rainbow mode - All power-ups active!</li>
+                </ul>
+                
+                <h3>Scoring</h3>
+                <ul>
+                    <li>Regular food: <strong>10 points</strong></li>
+                    <li>Super food: <strong>50 points</strong></li>
+                    <li>Each level completed: <strong>100 points</strong></li>
+                    <li>Power-up collected: <strong>25 points</strong></li>
+                    <li>Length bonus: <strong>5 points per segment</strong> when leveling up</li>
+                </ul>
+                
+                <h3>Tips for Success</h3>
+                <ul>
+                    <li>Plan your route to avoid trapping yourself</li>
+                    <li>Collect power-ups strategically - save them for difficult situations</li>
+                    <li>Use the grid to help navigate precisely</li>
+                    <li>Focus on evolution milestones for permanent upgrades</li>
+                    <li>When long, move in large circular patterns</li>
+                </ul>
+            </div>
+            
+            <div class="button-container">
+                <button class="button" id="playFromInstructions">PLAY NOW</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get DOM elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameStart = document.getElementById('gameStart');
+        const gameOver = document.getElementById('gameOver');
+        const instructionsScreen = document.getElementById('instructionsScreen');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const instructionsButton = document.getElementById('instructionsButton');
+        const closeInstructions = document.getElementById('closeInstructions');
+        const playFromInstructions = document.getElementById('playFromInstructions');
+        const menuButton = document.getElementById('menuButton');
+        const scoreElement = document.getElementById('score');
+        const highScoreElement = document.getElementById('highScore');
+        const levelElement = document.getElementById('level');
+        const lengthElement = document.getElementById('length');
+        const finalScoreElement = document.getElementById('finalScore');
+        const powerupIndicator = document.getElementById('powerupIndicator');
+        const evolutionNotification = document.getElementById('evolutionNotification');
+
+        // Game variables
+        let game = {
+            running: false,
+            paused: false,
+            score: 0,
+            highScore: localStorage.getItem('snakeHighScore') || 0,
+            level: 1,
+            speed: 10,
+            gridSize: 40,
+            lastTime: 0,
+            particles: [],
+            food: {},
+            superFood: null,
+            powerUps: [],
+            activePowerUps: {},
+            evolutionLevel: 0
+        };
+
+        // Snake variables
+        let snake = {
+            x: 400,
+            y: 300,
+            dx: game.gridSize,
+            dy: 0,
+            cells: [],
+            maxCells: 3,
+            color: '#00ffaa',
+            trailEffect: false,
+            phaseWalls: false,
+            rainbowMode: false
+        };
+
+        // Initialize high score display
+        highScoreElement.textContent = `High: ${game.highScore}`;
+
+        // Power-up types
+        const POWERUP_TYPES = {
+            SPEED: {name: 'Speed Boost', color: '#ffaa00', duration: 10000, effect: '2x speed'},
+            SHIELD: {name: 'Shield', color: '#aa00ff', duration: 8000, effect: 'Wall immunity'},
+            MULTIPLIER: {name: 'Multiplier', color: '#00aaff', duration: 15000, effect: '2x points'},
+            RAINBOW: {name: 'Rainbow', color: '#ffffff', duration: 5000, effect: 'All powers'}
+        };
+
+        // Draw rounded rectangle helper function
+        function roundedRect(x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+
+        function createFood() {
+            game.food = {
+                x: Math.floor(Math.random() * (canvas.width / game.gridSize)) * game.gridSize,
+                y: Math.floor(Math.random() * (canvas.height / game.gridSize)) * game.gridSize,
+                radius: game.gridSize / 2 - 2,
+                pulse: 0
+            };
+        }
+
+        function createSuperFood() {
+            if (game.level >= 10 && Math.random() < 0.3) {
+                game.superFood = {
+                    x: Math.floor(Math.random() * (canvas.width / game.gridSize)) * game.gridSize,
+                    y: Math.floor(Math.random() * (canvas.height / game.gridSize)) * game.gridSize,
+                    radius: game.gridSize / 2 - 2,
+                    pulse: 0,
+                    rotation: 0
+                };
+            }
+        }
+
+        function createPowerUp() {
+            if (Math.random() < 0.02 + game.level * 0.002) {
+                const types = Object.keys(POWERUP_TYPES);
+                const type = types[Math.floor(Math.random() * types.length)];
+                game.powerUps.push({
+                    x: Math.floor(Math.random() * (canvas.width / game.gridSize)) * game.gridSize,
+                    y: Math.floor(Math.random() * (canvas.height / game.gridSize)) * game.gridSize,
+                    type: type,
+                    radius: game.gridSize / 2 - 4,
+                    rotation: 0,
+                    collected: false
+                });
+            }
+        }
+
+        function drawFood() {
+            ctx.save();
+            ctx.translate(game.food.x + game.gridSize/2, game.food.y + game.gridSize/2);
+            game.food.pulse += 0.1;
+            const pulseSize = Math.sin(game.food.pulse) * 3;
+            ctx.fillStyle = '#00ffaa';
+            ctx.beginPath();
+            ctx.arc(0, 0, game.food.radius + pulseSize, 0, Math.PI * 2);
+            ctx.fill();
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, game.food.radius);
+            gradient.addColorStop(0, '#ffffff');
+            gradient.addColorStop(1, '#00ffaa');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(0, 0, game.food.radius - 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(-game.food.radius/3, -game.food.radius/3, game.food.radius/4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            
+            if (game.superFood) {
+                ctx.save();
+                ctx.translate(game.superFood.x + game.gridSize/2, game.superFood.y + game.gridSize/2);
+                game.superFood.rotation += 0.05;
+                game.superFood.pulse += 0.15;
+                const superPulseSize = Math.sin(game.superFood.pulse) * 4;
+                ctx.rotate(game.superFood.rotation);
+                ctx.fillStyle = '#ff5555';
+                ctx.beginPath();
+                ctx.arc(0, 0, game.superFood.radius + superPulseSize, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffaa00';
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * Math.PI * 2) / 5;
+                    const radius = i % 2 === 0 ? game.superFood.radius : game.superFood.radius / 2;
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function drawPowerUps() {
+            game.powerUps.forEach(powerup => {
+                if (powerup.collected) return;
+                ctx.save();
+                ctx.translate(powerup.x + game.gridSize/2, powerup.y + game.gridSize/2);
+                powerup.rotation += 0.03;
+                ctx.rotate(powerup.rotation);
+                const type = POWERUP_TYPES[powerup.type];
+                ctx.shadowColor = type.color;
+                ctx.shadowBlur = 15;
+                switch(powerup.type) {
+                    case 'SPEED':
+                        ctx.fillStyle = type.color;
+                        ctx.beginPath();
+                        for (let i = 0; i < 5; i++) {
+                            const angle = (i * Math.PI * 2) / 5;
+                            const radius = i % 2 === 0 ? powerup.radius : powerup.radius / 2;
+                            const x = Math.cos(angle) * radius;
+                            const y = Math.sin(angle) * radius;
+                            if (i === 0) ctx.moveTo(x, y);
+                            else ctx.lineTo(x, y);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        break;
+                    case 'SHIELD':
+                        ctx.fillStyle = type.color;
+                        ctx.beginPath();
+                        for (let i = 0; i < 6; i++) {
+                            const angle = (i * Math.PI * 2) / 6;
+                            const x = Math.cos(angle) * powerup.radius;
+                            const y = Math.sin(angle) * powerup.radius;
+                            if (i === 0) ctx.moveTo(x, y);
+                            else ctx.lineTo(x, y);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        break;
+                    case 'MULTIPLIER':
+                        ctx.fillStyle = type.color;
+                        ctx.beginPath();
+                        ctx.moveTo(0, -powerup.radius);
+                        ctx.lineTo(powerup.radius, 0);
+                        ctx.lineTo(0, powerup.radius);
+                        ctx.lineTo(-powerup.radius, 0);
+                        ctx.closePath();
+                        ctx.fill();
+                        break;
+                    case 'RAINBOW':
+                        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, powerup.radius);
+                        gradient.addColorStop(0, '#ff0000');
+                        gradient.addColorStop(0.2, '#ffaa00');
+                        gradient.addColorStop(0.4, '#ffff00');
+                        gradient.addColorStop(0.6, '#00ff00');
+                        gradient.addColorStop(0.8, '#00aaff');
+                        gradient.addColorStop(1, '#aa00ff');
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, powerup.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        break;
+                }
+                ctx.shadowBlur = 0;
+                ctx.restore();
+            });
+        }
+
+        function drawSnake() {
+            snake.cells.forEach((cell, index) => {
+                let cellColor = snake.color;
+                if (snake.rainbowMode) {
+                    const hue = (Date.now() / 50 + index * 10) % 360;
+                    cellColor = `hsl(${hue}, 100%, 60%)`;
+                } else if (game.activePowerUps.SPEED) {
+                    cellColor = '#ffaa00';
+                } else if (game.activePowerUps.SHIELD) {
+                    cellColor = '#aa00ff';
+                } else if (game.activePowerUps.MULTIPLIER) {
+                    cellColor = '#00aaff';
+                }
+                ctx.save();
+                ctx.translate(cell.x + game.gridSize/2, cell.y + game.gridSize/2);
+                ctx.shadowColor = cellColor;
+                ctx.shadowBlur = 15;
+                ctx.fillStyle = cellColor;
+                roundedRect(-game.gridSize/2, -game.gridSize/2, game.gridSize, game.gridSize, 8);
+                ctx.fill();
+                if (index === 0) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    roundedRect(-game.gridSize/4, -game.gridSize/4, game.gridSize/2, game.gridSize/2, 4);
+                    ctx.fill();
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath();
+                    ctx.arc(-game.gridSize/6, -game.gridSize/6, 3, 0, Math.PI * 2);
+                    ctx.arc(game.gridSize/6, -game.gridSize/6, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.shadowBlur = 0;
+                ctx.restore();
+                if (snake.trailEffect && index < snake.cells.length - 1) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.3;
+                    ctx.fillStyle = '#ff00ff';
+                    const nextCell = snake.cells[index + 1];
+                    ctx.beginPath();
+                    ctx.moveTo(cell.x + game.gridSize/2, cell.y + game.gridSize/2);
+                    ctx.lineTo(nextCell.x + game.gridSize/2, nextCell.y + game.gridSize/2);
+                    ctx.lineWidth = game.gridSize/2;
+                    ctx.strokeStyle = '#ff00ff';
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            });
+        }
+
+        function updatePowerUps() {
+            const now = Date.now();
+            let activePowerUpText = '';
+            Object.keys(game.activePowerUps).forEach(type => {
+                if (now > game.activePowerUps[type].expires) {
+                    delete game.activePowerUps[type];
+                } else {
+                    const timeLeft = Math.ceil((game.activePowerUps[type].expires - now) / 1000);
+                    activePowerUpText += `${POWERUP_TYPES[type].name}: ${timeLeft}s `;
+                }
+            });
+            if (activePowerUpText) {
+                powerupIndicator.textContent = activePowerUpText;
+                powerupIndicator.style.display = 'block';
+            } else {
+                powerupIndicator.style.display = 'none';
+            }
+        }
+
+        function activatePowerUp(type) {
+            const duration = POWERUP_TYPES[type].duration;
+            if (type === 'RAINBOW') {
+                Object.keys(POWERUP_TYPES).forEach(powerType => {
+                    if (powerType !== 'RAINBOW') {
+                        game.activePowerUps[powerType] = {
+                            expires: Date.now() + duration
+                        };
+                    }
+                });
+            }
+            game.activePowerUps[type] = {
+                expires: Date.now() + duration
+            };
+            if (type === 'SPEED') {
+                game.speed = 15;
+            }
+            game.score += 25;
+            scoreElement.textContent = `Score: ${game.score}`;
+        }
+
+        function checkEvolution() {
+            const newEvolutionLevel = Math.floor(game.level / 5);
+            if (newEvolutionLevel > game.evolutionLevel) {
+                game.evolutionLevel = newEvolutionLevel;
+                evolutionNotification.textContent = `EVOLUTION ${game.evolutionLevel}!`;
+                evolutionNotification.style.display = 'block';
+                if (game.evolutionLevel >= 1) {
+                    snake.trailEffect = true;
+                }
+                if (game.evolutionLevel >= 3) {
+                    snake.phaseWalls = true;
+                }
+                if (game.evolutionLevel >= 5) {
+                    snake.rainbowMode = true;
+                }
+                setTimeout(() => {
+                    evolutionNotification.style.display = 'none';
+                }, 2000);
+            }
+        }
+
+        function update() {
+            snake.x += snake.dx;
+            snake.y += snake.dy;
+            if (!snake.phaseWalls && !game.activePowerUps.SHIELD) {
+                if (snake.x < 0 || snake.x >= canvas.width || snake.y < 0 || snake.y >= canvas.height) {
+                    return false;
+                }
+            } else {
+                if (snake.x < 0) snake.x = canvas.width - game.gridSize;
+                if (snake.x >= canvas.width) snake.x = 0;
+                if (snake.y < 0) snake.y = canvas.height - game.gridSize;
+                if (snake.y >= canvas.height) snake.y = 0;
+            }
+            snake.cells.unshift({x: snake.x, y: snake.y});
+            if (snake.cells.length > snake.maxCells) {
+                snake.cells.pop();
+            }
+            const head = snake.cells[0];
+            const foodDist = Math.sqrt(
+                Math.pow(head.x + game.gridSize/2 - (game.food.x + game.gridSize/2), 2) + 
+                Math.pow(head.y + game.gridSize/2 - (game.food.y + game.gridSize/2), 2)
+            );
+            if (foodDist < game.food.radius + game.gridSize/2) {
+                snake.maxCells++;
+                game.score += 10;
+                if (game.activePowerUps.MULTIPLIER) {
+                    game.score += 10;
+                }
+                scoreElement.textContent = `Score: ${game.score}`;
+                lengthElement.textContent = `Length: ${snake.maxCells}`;
+                createFood();
+                createSuperFood();
+                if (game.score >= game.level * 100) {
+                    game.level++;
+                    levelElement.textContent = `Level: ${game.level}`;
+                    game.speed = Math.min(20, 10 + game.level);
+                    checkEvolution();
+                    game.score += 100 + (snake.maxCells * 5);
+                    scoreElement.textContent = `Score: ${game.score}`;
+                }
+            }
+            if (game.superFood) {
+                const superFoodDist = Math.sqrt(
+                    Math.pow(head.x + game.gridSize/2 - (game.superFood.x + game.gridSize/2), 2) + 
+                    Math.pow(head.y + game.gridSize/2 - (game.superFood.y + game.gridSize/2), 2)
+                );
+                if (superFoodDist < game.superFood.radius + game.gridSize/2) {
+                    snake.maxCells += 3;
+                    game.score += 50;
+                    if (game.activePowerUps.MULTIPLIER) {
+                        game.score += 50;
+                    }
+                    scoreElement.textContent = `Score: ${game.score}`;
+                    lengthElement.textContent = `Length: ${snake.maxCells}`;
+                    game.superFood = null;
+                    if (game.score >= game.level * 100) {
+                        game.level++;
+                        levelElement.textContent = `Level: ${game.level}`;
+                        game.speed = Math.min(20, 10 + game.level);
+                        checkEvolution();
+                        game.score += 100 + (snake.maxCells * 5);
+                        scoreElement.textContent = `Score: ${game.score}`;
+                    }
+                }
+            }
+            game.powerUps.forEach((powerup, index) => {
+                if (!powerup.collected) {
+                    const powerupDist = Math.sqrt(
+                        Math.pow(head.x + game.gridSize/2 - (powerup.x + game.gridSize/2), 2) + 
+                        Math.pow(head.y + game.gridSize/2 - (powerup.y + game.gridSize/2), 2)
+                    );
+                    if (powerupDist < powerup.radius + game.gridSize/2) {
+                        powerup.collected = true;
+                        activatePowerUp(powerup.type);
+                        setTimeout(() => {
+                            game.powerUps.splice(index, 1);
+                        }, 100);
+                    }
+                }
+            });
+            for (let i = 3; i < snake.cells.length; i++) {
+                if (snake.cells[i].x === head.x && snake.cells[i].y === head.y) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function draw() {
+            ctx.fillStyle = '#0d0d1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'rgba(0, 150, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += game.gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += game.gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            drawFood();
+            drawPowerUps();
+            drawSnake();
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (!game.running || game.paused) return;
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (snake.dx === 0) {
+                        snake.dx = -game.gridSize;
+                        snake.dy = 0;
+                    }
+                    break;
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (snake.dy === 0) {
+                        snake.dx = 0;
+                        snake.dy = -game.gridSize;
+                    }
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (snake.dx === 0) {
+                        snake.dx = game.gridSize;
+                        snake.dy = 0;
+                    }
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (snake.dy === 0) {
+                        snake.dx = 0;
+                        snake.dy = game.gridSize;
+                    }
+                    break;
+                case ' ':
+                    break;
+                case 'p':
+                case 'P':
+                    game.paused = !game.paused;
+                    break;
+            }
+        });
+
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+        playFromInstructions.addEventListener('click', startGame);
+        instructionsButton.addEventListener('click', showInstructions);
+        closeInstructions.addEventListener('click', hideInstructions);
+
+        function showInstructions() {
+            gameStart.style.display = 'none';
+            instructionsScreen.style.display = 'flex';
+        }
+        
+        function hideInstructions() {
+            instructionsScreen.style.display = 'none';
+            gameStart.style.display = 'flex';
+        }
+
+        function startGame() {
+            game.running = true;
+            game.paused = false;
+            game.score = 0;
+            game.level = 1;
+            game.speed = 10;
+            game.evolutionLevel = 0;
+            game.powerUps = [];
+            game.activePowerUps = {};
+            game.superFood = null;
+            snake = {
+                x: Math.floor(canvas.width / game.gridSize / 2) * game.gridSize,
+                y: Math.floor(canvas.height / game.gridSize / 2) * game.gridSize,
+                dx: game.gridSize,
+                dy: 0,
+                cells: [],
+                maxCells: 3,
+                color: '#00ffaa',
+                trailEffect: false,
+                phaseWalls: false,
+                rainbowMode: false
+            };
+            for (let i = 0; i < snake.maxCells; i++) {
+                snake.cells.push({x: snake.x - i * game.gridSize, y: snake.y});
+            }
+            createFood();
+            gameStart.style.display = 'none';
+            gameOver.style.display = 'none';
+            instructionsScreen.style.display = 'none';
+            scoreElement.textContent = `Score: ${game.score}`;
+            levelElement.textContent = `Level: ${game.level}`;
+            lengthElement.textContent = `Length: ${snake.maxCells}`;
+            gameLoop();
+        }
+
+        function endGame() {
+            game.running = false;
+            if (game.score > game.highScore) {
+                game.highScore = game.score;
+                localStorage.setItem('snakeHighScore', game.highScore);
+                highScoreElement.textContent = `High: ${game.highScore}`;
+            }
+            finalScoreElement.textContent = `Score: ${game.score}`;
+            gameOver.style.display = 'flex';
+        }
+
+        function gameLoop() {
+            if (!game.running || game.paused) return;
+            const gameContinues = update();
+            if (!gameContinues) {
+                endGame();
+                return;
+            }
+            updatePowerUps();
+            if (!game.activePowerUps.SPEED) {
+                game.speed = Math.min(20, 10 + game.level);
+            }
+            createPowerUp();
+            draw();
+            setTimeout(() => {
+                requestAnimationFrame(gameLoop);
+            }, 1000 / game.speed);
+        }
+
+        createFood();
+        draw();
+    </script>
+</body>
+</html>
