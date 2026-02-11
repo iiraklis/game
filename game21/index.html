@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chrono Cascade - Time Manipulation Arcade</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2a 100%);
+            color: #fff;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .main-menu-button {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 30;
+            background: linear-gradient(135deg, #8a2be2 0%, #ff00ff 100%);
+            color: #fff;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(138, 43, 226, 0.4);
+        }
+        
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        canvas {
+            display: block;
+            background: #000;
+            box-shadow: 0 0 40px rgba(138, 43, 226, 0.5);
+            max-width: 100%;
+            max-height: 100vh;
+        }
+        
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 10;
+        }
+        
+        .screen.active {
+            display: flex;
+        }
+        
+        .title {
+            font-size: 3rem;
+            text-shadow: 0 0 20px #8a2be2, 0 0 40px #8a2be2;
+            margin-bottom: 2rem;
+            animation: glow 2s ease-in-out infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { text-shadow: 0 0 20px #8a2be2, 0 0 40px #8a2be2; }
+            50% { text-shadow: 0 0 30px #ff00ff, 0 0 60px #ff00ff; }
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #8a2be2 0%, #ff00ff 100%);
+            border: none;
+            padding: 15px 40px;
+            margin: 10px;
+            font-size: 1.2rem;
+            color: white;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.3s;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 5px 15px rgba(138, 43, 226, 0.4);
+        }
+        
+        .button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(138, 43, 226, 0.6);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .content-box {
+            background: rgba(20, 10, 30, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 2px solid #8a2be2;
+            margin: 20px;
+        }
+        
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .level-button {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a0a2a 0%, #2a1a3a 100%);
+            border: 2px solid #8a2be2;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .level-button:hover:not(.locked) {
+            transform: scale(1.05);
+            border-color: #ff00ff;
+        }
+        
+        .level-button.locked {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        
+        .level-button.completed {
+            background: linear-gradient(135deg, #8a2be2 0%, #ff00ff 100%);
+        }
+        
+        .slider-container {
+            margin: 15px 0;
+        }
+        
+        .slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        .checkbox-container input {
+            margin-right: 10px;
+            width: 20px;
+            height: 20px;
+        }
+        
+        .hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 1.2rem;
+            text-shadow: 2px 2px 4px #000;
+            z-index: 5;
+            pointer-events: none;
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            display: none;
+            gap: 20px;
+            z-index: 5;
+        }
+        
+        .joystick-area {
+            width: 120px;
+            height: 120px;
+            background: rgba(138, 43, 226, 0.3);
+            border-radius: 50%;
+            position: relative;
+            border: 3px solid rgba(138, 43, 226, 0.5);
+        }
+        
+        .joystick {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 0, 255, 0.7);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .action-button {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 0, 255, 0.7);
+            border-radius: 50%;
+            border: 3px solid rgba(138, 43, 226, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            user-select: none;
+        }
+        
+        @media (max-width: 768px) {
+            .title { font-size: 2rem; }
+            .button { padding: 12px 30px; font-size: 1rem; }
+            .controls { display: flex; }
+        }
+    </style>
+</head>
+<body>
+    <a class="main-menu-button" href="../index.html">Main Menu</a>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="hud" id="hud"></div>
+        
+        <div class="controls">
+            <div class="joystick-area" id="joystickArea">
+                <div class="joystick" id="joystick"></div>
+            </div>
+            <div class="action-button" id="slowTimeBtn">⏱</div>
+            <div class="action-button" id="dashBtn">⚡</div>
+        </div>
+        
+        <!-- Title Screen -->
+        <div class="screen active" id="titleScreen">
+            <h1 class="title">CHRONO CASCADE</h1>
+            <p style="margin-bottom: 2rem; text-align: center; max-width: 500px;">
+                Master time itself in this fast-paced arcade adventure!<br>
+                Seed: 2026-02-11
+            </p>
+            <button class="button" onclick="game.showScreen('play')">NEW GAME</button>
+            <button class="button" onclick="game.continueGame()">CONTINUE</button>
+            <button class="button" onclick="game.showScreen('howToPlay')">HOW TO PLAY</button>
+            <button class="button" onclick="game.showScreen('settings')">SETTINGS</button>
+        </div>
+        
+        <!-- How To Play Screen -->
+        <div class="screen" id="howToPlayScreen">
+            <div class="content-box">
+                <h2 style="margin-bottom: 20px; color: #ff00ff;">HOW TO PLAY</h2>
+                <h3 style="color: #8a2be2;">Objective</h3>
+                <p style="margin-bottom: 15px;">
+                    Collect all time crystals while avoiding temporal anomalies and enemy drones. 
+                    Use your time manipulation abilities to survive!
+                </p>
+                
+                <h3 style="color: #8a2be2;">Desktop Controls</h3>
+                <ul style="margin-bottom: 15px; line-height: 1.8;">
+                    <li><strong>WASD / Arrow Keys:</strong> Move</li>
+                    <li><strong>SPACE:</strong> Slow Time (drains energy)</li>
+                    <li><strong>SHIFT:</strong> Dash (cooldown applies)</li>
+                    <li><strong>P / ESC:</strong> Pause</li>
+                </ul>
+                
+                <h3 style="color: #8a2be2;">Mobile Controls</h3>
+                <ul style="margin-bottom: 15px; line-height: 1.8;">
+                    <li><strong>Left Joystick:</strong> Move</li>
+                    <li><strong>⏱ Button:</strong> Slow Time</li>
+                    <li><strong>⚡ Button:</strong> Dash</li>
+                </ul>
+                
+                <h3 style="color: #8a2be2;">Mechanics</h3>
+                <ul style="margin-bottom: 15px; line-height: 1.8;">
+                    <li><strong>Time Crystals:</strong> Collect all to complete the level</li>
+                    <li><strong>Combo System:</strong> Collect crystals quickly for bonus points</li>
+                    <li><strong>Slow Time:</strong> Enemies move slower, but drains energy</li>
+                    <li><strong>Dash:</strong> Quick burst of speed to dodge enemies</li>
+                    <li><strong>Lives:</strong> You have 3 lives per level</li>
+                </ul>
+                
+                <h3 style="color: #8a2be2;">Tips</h3>
+                <ul style="margin-bottom: 20px; line-height: 1.8;">
+                    <li>Chain crystal pickups to build combos</li>
+                    <li>Use slow time strategically - energy regenerates slowly</li>
+                    <li>Dash through enemies to avoid damage</li>
+                    <li>Later levels introduce new enemy types and hazards</li>
+                </ul>
+                
+                <button class="button" onclick="game.showScreen('title')">BACK</button>
+            </div>
+        </div>
+        
+        <!-- Settings Screen -->
+        <div class="screen" id="settingsScreen">
+            <div class="content-box">
+                <h2 style="margin-bottom: 20px; color: #ff00ff;">SETTINGS</h2>
+                
+                <div class="slider-container">
+                    <label>Music Volume</label>
+                    <input type="range" class="slider" min="0" max="100" value="50" 
+                           onchange="game.setMusicVolume(this.value)">
+                </div>
+                
+                <div class="slider-container">
+                    <label>SFX Volume</label>
+                    <input type="range" class="slider" min="0" max="100" value="70" 
+                           onchange="game.setSFXVolume(this.value)">
+                </div>
+                
+                <div class="checkbox-container">
+                    <input type="checkbox" id="muteCheckbox" onchange="game.toggleMute(this.checked)">
+                    <label for="muteCheckbox">Mute All Sounds</label>
+                </div>
+                
+                <div class="checkbox-container">
+                    <input type="checkbox" id="reducedMotionCheckbox" 
+                           onchange="game.toggleReducedMotion(this.checked)">
+                    <label for="reducedMotionCheckbox">Reduced Motion</label>
+                </div>
+                
+                <div class="checkbox-container">
+                    <input type="checkbox" id="highContrastCheckbox" 
+                           onchange="game.toggleHighContrast(this.checked)">
+                    <label for="highContrastCheckbox">High Contrast Mode</label>
+                </div>
+                
+                <button class="button" onclick="game.showScreen('title')">BACK</button>
+            </div>
+        </div>
+        
+        <!-- Level Select Screen -->
+        <div class="screen" id="levelSelectScreen">
+            <div class="content-box">
+                <h2 style="margin-bottom: 20px; color: #ff00ff;">SELECT LEVEL</h2>
+                <div class="level-grid" id="levelGrid"></div>
+                <button class="button" onclick="game.showScreen('title')">BACK</button>
+            </div>
+        </div>
+        
+        <!-- End Screen -->
+        <div class="screen" id="endScreen">
+            <div class="content-box" style="text-align: center;">
+                <h2 id="endTitle" style="margin-bottom: 20px; color: #ff00ff;">LEVEL COMPLETE!</h2>
+                <div id="endStats" style="margin: 30px 0; font-size: 1.2rem; line-height: 2;"></div>
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button class="button" onclick="game.nextLevel()">NEXT LEVEL</button>
+                    <button class="button" onclick="game.retryLevel()">RETRY</button>
+                    <button class="button" onclick="game.showScreen('levelSelect')">LEVEL SELECT</button>
+                    <button class="button" onclick="game.showScreen('title')">TITLE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============= GAME CORE =============
+        const game = {
+            canvas: null,
+            ctx: null,
+            width: 800,
+            height: 600,
+            dpr: 1,
+            
+            // Game state
+            state: 'title',
+            currentLevel: 1,
+            maxLevel: 10,
+            score: 0,
+            lives: 3,
+            combo: 0,
+            comboTimer: 0,
+            energy: 100,
+            
+            // Player
+            player: {
+                x: 400,
+                y: 300,
+                vx: 0,
+                vy: 0,
+                radius: 12,
+                speed: 4,
+                dashSpeed: 12,
+                dashing: false,
+                dashCooldown: 0,
+                invulnerable: 0,
+                trail: []
+            },
+            
+            // Game objects
+            crystals: [],
+            enemies: [],
+            particles: [],
+            
+            // Time manipulation
+            timeScale: 1,
+            slowTimeActive: false,
+            
+            // Input
+            keys: {},
+            touch: { active: false, x: 0, y: 0, dx: 0, dy: 0 },
+            
+            // Settings
+            settings: {
+                musicVolume: 0.5,
+                sfxVolume: 0.7,
+                muted: false,
+                reducedMotion: false,
+                highContrast: false
+            },
+            
+            // Save data
+            saveData: {
+                unlockedLevels: 1,
+                completedLevels: [],
+                bestScores: {},
+                totalScore: 0
+            },
+            
+            // Audio
+            audioContext: null,
+            musicNode: null,
+            
+            // Screen shake
+            shakeAmount: 0,
+            
+            // Animation
+            lastTime: 0,
+            
+            init() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.dpr = window.devicePixelRatio || 1;
+                
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                
+                // Input setup
+                window.addEventListener('keydown', (e) => {
+                    this.keys[e.key.toLowerCase()] = true;
+                    if (e.key === ' ') e.preventDefault();
+                    if (this.state === 'playing') {
+                        if (e.key === 'p' || e.key === 'Escape') this.pauseGame();
+                    }
+                });
+                
+                window.addEventListener('keyup', (e) => {
+                    this.keys[e.key.toLowerCase()] = false;
+                });
+                
+                // Touch controls
+                this.setupTouchControls();
+                
+                // Audio setup
+                this.setupAudio();
+                
+                // Load save data
+                this.loadGame();
+                
+                // Start game loop
+                requestAnimationFrame((t) => this.gameLoop(t));
+            },
+            
+            resize() {
+                const aspect = this.width / this.height;
+                let canvasWidth = window.innerWidth;
+                let canvasHeight = window.innerHeight;
+                
+                if (canvasWidth / canvasHeight > aspect) {
+                    canvasWidth = canvasHeight * aspect;
+                } else {
+                    canvasHeight = canvasWidth / aspect;
+                }
+                
+                this.canvas.width = this.width * this.dpr;
+                this.canvas.height = this.height * this.dpr;
+                this.canvas.style.width = canvasWidth + 'px';
+                this.canvas.style.height = canvasHeight + 'px';
+                
+                this.ctx.scale(this.dpr, this.dpr);
+            },
+            
+            setupTouchControls() {
+                const joystickArea = document.getElementById('joystickArea');
+                const joystick = document.getElementById('joystick');
+                const slowBtn = document.getElementById('slowTimeBtn');
+                const dashBtn = document.getElementById('dashBtn');
+                
+                let joystickActive = false;
+                let joystickCenter = { x: 0, y: 0 };
+                
+                joystickArea.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    joystickActive = true;
+                    const rect = joystickArea.getBoundingClientRect();
+                    joystickCenter.x = rect.left + rect.width / 2;
+                    joystickCenter.y = rect.top + rect.height / 2;
+                });
+                
+                joystickArea.addEventListener('touchmove', (e) => {
+                    if (!joystickActive) return;
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const dx = touch.clientX - joystickCenter.x;
+                    const dy = touch.clientY - joystickCenter.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const maxDist = 35;
+                    
+                    if (dist > maxDist) {
+                        this.touch.dx = (dx / dist) * maxDist;
+                        this.touch.dy = (dy / dist) * maxDist;
+                    } else {
+                        this.touch.dx = dx;
+                        this.touch.dy = dy;
+                    }
+                    
+                    joystick.style.transform = `translate(calc(-50% + ${this.touch.dx}px), calc(-50% + ${this.touch.dy}px))`;
+                    this.touch.active = true;
+                });
+                
+                joystickArea.addEventListener('touchend', () => {
+                    joystickActive = false;
+                    this.touch.active = false;
+                    this.touch.dx = 0;
+                    this.touch.dy = 0;
+                    joystick.style.transform = 'translate(-50%, -50%)';
+                });
+                
+                slowBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.keys['space'] = true;
+                });
+                
+                slowBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.keys['space'] = false;
+                });
+                
+                dashBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.keys['shift'] = true;
+                });
+                
+                dashBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.keys['shift'] = false;
+                });
+            },
+            
+            setupAudio() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.startMusic();
+                } catch (e) {
+                    console.log('Audio not supported');
+                }
+            },
+            
+            startMusic() {
+                if (!this.audioContext || this.musicNode) return;
+                
+                // Simple procedural music using oscillators
+                const osc1 = this.audioContext.createOscillator();
+                const osc2 = this.audioContext.createOscillator();
+                const gain = this.audioContext.createGain();
+                const filter = this.audioContext.createBiquadFilter();
+                
+                osc1.type = 'sine';
+                osc2.type = 'triangle';
+                filter.type = 'lowpass';
+                filter.frequency.value = 800;
+                
+                // Ambient melody
+                const notes = [220, 247, 277, 330, 370, 330, 277, 247];
+                let noteIndex = 0;
+                
+                const updateNote = () => {
+                    osc1.frequency.setValueAtTime(notes[noteIndex], this.audioContext.currentTime);
+                    osc2.frequency.setValueAtTime(notes[noteIndex] * 1.5, this.audioContext.currentTime);
+                    noteIndex = (noteIndex + 1) % notes.length;
+                };
+                
+                updateNote();
+                setInterval(updateNote, 500);
+                
+                osc1.connect(filter);
+                osc2.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.audioContext.destination);
+                
+                gain.gain.value = this.settings.muted ? 0 : this.settings.musicVolume * 0.15;
+                
+                osc1.start();
+                osc2.start();
+                
+                this.musicNode = { osc1, osc2, gain };
+            },
+            
+            playSound(freq, duration = 0.1, type = 'sine') {
+                if (!this.audioContext || this.settings.muted) return;
+                
+                const osc = this.audioContext.createOscillator();
+                const gain = this.audioContext.createGain();
+                
+                osc.type = type;
+                osc.frequency.value = freq;
+                
+                gain.gain.value = this.settings.sfxVolume * 0.3;
+                gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(this.audioContext.destination);
+                
+                osc.start();
+                osc.stop(this.audioContext.currentTime + duration);
+            },
+            
+            // Save/Load
+            saveGame() {
+                localStorage.setItem('chronoCascadeSave', JSON.stringify(this.saveData));
+            },
+            
+            loadGame() {
+                const saved = localStorage.getItem('chronoCascadeSave');
+                if (saved) {
+                    this.saveData = JSON.parse(saved);
+                }
+            },
+            
+            // Screen management
+            showScreen(screenName) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                
+                if (screenName === 'title') {
+                    document.getElementById('titleScreen').classList.add('active');
+                } else if (screenName === 'howToPlay') {
+                    document.getElementById('howToPlayScreen').classList.add('active');
+                } else if (screenName === 'settings') {
+                    document.getElementById('settingsScreen').classList.add('active');
+                } else if (screenName === 'levelSelect') {
+                    this.showLevelSelect();
+                    document.getElementById('levelSelectScreen').classList.add('active');
+                } else if (screenName === 'play') {
+                    this.showLevelSelect();
+                    document.getElementById('levelSelectScreen').classList.add('active');
+                }
+            },
+            
+            showLevelSelect() {
+                const grid = document.getElementById('levelGrid');
+                grid.innerHTML = '';
+                
+                for (let i = 1; i <= this.maxLevel; i++) {
+                    const btn = document.createElement('div');
+                    btn.className = 'level-button';
+                    
+                    if (i > this.saveData.unlockedLevels) {
+                        btn.classList.add('locked');
+                        btn.innerHTML = `<div style="font-size: 2rem;">🔒</div><div>Level ${i}</div>`;
+                    } else {
+                        if (this.saveData.completedLevels.includes(i)) {
+                            btn.classList.add('completed');
+                        }
+                        btn.innerHTML = `<div style="font-size: 2rem;">⭐</div><div>Level ${i}</div>`;
+                        if (this.saveData.bestScores[i]) {
+                            btn.innerHTML += `<div style="font-size: 0.8rem;">${this.saveData.bestScores[i]}</div>`;
+                        }
+                        btn.onclick = () => this.startLevel(i);
+                    }
+                    
+                    grid.appendChild(btn);
+                }
+            },
+            
+            continueGame() {
+                if (this.saveData.unlockedLevels > 1) {
+                    this.showScreen('levelSelect');
+                } else {
+                    this.startLevel(1);
+                }
+            },
+            
+            // Settings
+            setMusicVolume(value) {
+                this.settings.musicVolume = value / 100;
+                if (this.musicNode && !this.settings.muted) {
+                    this.musicNode.gain.gain.value = this.settings.musicVolume * 0.15;
+                }
+            },
+            
+            setSFXVolume(value) {
+                this.settings.sfxVolume = value / 100;
+            },
+            
+            toggleMute(muted) {
+                this.settings.muted = muted;
+                if (this.musicNode) {
+                    this.musicNode.gain.gain.value = muted ? 0 : this.settings.musicVolume * 0.15;
+                }
+            },
+            
+            toggleReducedMotion(enabled) {
+                this.settings.reducedMotion = enabled;
+            },
+            
+            toggleHighContrast(enabled) {
+                this.settings.highContrast = enabled;
+            },
+            
+            // Level management
+            startLevel(level) {
+                this.currentLevel = level;
+                this.state = 'playing';
+                this.lives = 3;
+                this.score = 0;
+                this.combo = 0;
+                this.comboTimer = 0;
+                this.energy = 100;
+                
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                
+                this.initLevel();
+                this.playSound(440, 0.2, 'square');
+            },
+            
+            initLevel() {
+                const seed = this.seededRandom(this.currentLevel * 1000);
+                
+                // Reset player
+                this.player.x = this.width / 2;
+                this.player.y = this.height / 2;
+                this.player.vx = 0;
+                this.player.vy = 0;
+                this.player.dashing = false;
+                this.player.dashCooldown = 0;
+                this.player.invulnerable = 0;
+                this.player.trail = [];
+                
+                // Generate crystals
+                this.crystals = [];
+                const numCrystals = 5 + this.currentLevel;
+                for (let i = 0; i < numCrystals; i++) {
+                    this.crystals.push({
+                        x: 50 + seed() * (this.width - 100),
+                        y: 50 + seed() * (this.height - 100),
+                        radius: 8,
+                        collected: false,
+                        pulse: 0
+                    });
+                }
+                
+                // Generate enemies
+                this.enemies = [];
+                const numEnemies = Math.min(2 + Math.floor(this.currentLevel / 2), 12);
+                for (let i = 0; i < numEnemies; i++) {
+                    const type = this.currentLevel < 4 ? 'chaser' : 
+                                 this.currentLevel < 7 ? (seed() > 0.5 ? 'chaser' : 'orbiter') :
+                                 seed() > 0.6 ? 'shooter' : (seed() > 0.5 ? 'chaser' : 'orbiter');
+                    
+                    this.enemies.push({
+                        x: seed() * this.width,
+                        y: seed() * this.height,
+                        vx: 0,
+                        vy: 0,
+                        radius: 10,
+                        type: type,
+                        angle: seed() * Math.PI * 2,
+                        orbitRadius: 100 + seed() * 100,
+                        shootCooldown: 0,
+                        health: type === 'shooter' ? 2 : 1
+                    });
+                }
+                
+                this.particles = [];
+            },
+            
+            seededRandom(seed) {
+                return () => {
+                    seed = (seed * 9301 + 49297) % 233280;
+                    return seed / 233280;
+                };
+            },
+            
+            // Game loop
+            gameLoop(currentTime) {
+                requestAnimationFrame((t) => this.gameLoop(t));
+                
+                if (this.state !== 'playing') {
+                    this.render();
+                    return;
+                }
+                
+                const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1);
+                this.lastTime = currentTime;
+                
+                this.update(deltaTime);
+                this.render();
+            },
+            
+            update(dt) {
+                // Time scaling
+                this.slowTimeActive = this.keys['space'] || this.keys[' '];
+                
+                if (this.slowTimeActive && this.energy > 0) {
+                    this.timeScale = 0.3;
+                    this.energy -= 30 * dt;
+                } else {
+                    this.timeScale = 1;
+                    this.energy = Math.min(100, this.energy + 10 * dt);
+                }
+                
+                const effectiveDt = dt * this.timeScale;
+                
+                // Update player
+                this.updatePlayer(dt, effectiveDt);
+                
+                // Update enemies
+                this.enemies.forEach(enemy => this.updateEnemy(enemy, effectiveDt));
+                
+                // Update crystals
+                this.crystals.forEach(crystal => {
+                    crystal.pulse += dt * 3;
+                    
+                    if (!crystal.collected) {
+                        const dx = this.player.x - crystal.x;
+                        const dy = this.player.y - crystal.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < this.player.radius + crystal.radius) {
+                            crystal.collected = true;
+                            this.collectCrystal(crystal);
+                        }
+                    }
+                });
+                
+                // Update particles
+                this.particles = this.particles.filter(p => {
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.life -= dt;
+                    p.alpha = p.life / p.maxLife;
+                    return p.life > 0;
+                });
+                
+                // Update combo timer
+                if (this.comboTimer > 0) {
+                    this.comboTimer -= dt;
+                    if (this.comboTimer <= 0) {
+                        this.combo = 0;
+                    }
+                }
+                
+                // Update screen shake
+                if (this.shakeAmount > 0) {
+                    this.shakeAmount *= 0.9;
+                    if (this.shakeAmount < 0.1) this.shakeAmount = 0;
+                }
+                
+                // Check win condition
+                if (this.crystals.every(c => c.collected)) {
+                    this.completeLevel();
+                }
+                
+                // Update HUD
+                this.updateHUD();
+            },
+            
+            updatePlayer(dt, effectiveDt) {
+                // Input
+                let dx = 0, dy = 0;
+                
+                if (this.keys['w'] || this.keys['arrowup']) dy -= 1;
+                if (this.keys['s'] || this.keys['arrowdown']) dy += 1;
+                if (this.keys['a'] || this.keys['arrowleft']) dx -= 1;
+                if (this.keys['d'] || this.keys['arrowright']) dx += 1;
+                
+                if (this.touch.active) {
+                    dx = this.touch.dx / 35;
+                    dy = this.touch.dy / 35;
+                }
+                
+                const mag = Math.sqrt(dx * dx + dy * dy);
+                if (mag > 0) {
+                    dx /= mag;
+                    dy /= mag;
+                }
+                
+                // Dash
+                if ((this.keys['shift'] && !this.player.dashing && this.player.dashCooldown <= 0)) {
+                    this.player.dashing = true;
+                    this.player.dashCooldown = 1.0;
+                    this.player.vx = dx * this.player.dashSpeed;
+                    this.player.vy = dy * this.player.dashSpeed;
+                    this.playSound(600, 0.1, 'sawtooth');
+                    this.player.invulnerable = 0.3;
+                }
+                
+                if (this.player.dashing) {
+                    this.player.vx *= 0.92;
+                    this.player.vy *= 0.92;
+                    if (Math.abs(this.player.vx) < 0.5 && Math.abs(this.player.vy) < 0.5) {
+                        this.player.dashing = false;
+                    }
+                } else {
+                    this.player.vx = dx * this.player.speed;
+                    this.player.vy = dy * this.player.speed;
+                }
+                
+                this.player.x += this.player.vx;
+                this.player.y += this.player.vy;
+                
+                // Bounds
+                this.player.x = Math.max(this.player.radius, Math.min(this.width - this.player.radius, this.player.x));
+                this.player.y = Math.max(this.player.radius, Math.min(this.height - this.player.radius, this.player.y));
+                
+                // Trail
+                if (!this.settings.reducedMotion) {
+                    this.player.trail.push({ x: this.player.x, y: this.player.y, alpha: 1 });
+                    if (this.player.trail.length > 10) this.player.trail.shift();
+                    this.player.trail.forEach(t => t.alpha *= 0.85);
+                }
+                
+                // Cooldowns
+                if (this.player.dashCooldown > 0) this.player.dashCooldown -= dt;
+                if (this.player.invulnerable > 0) this.player.invulnerable -= dt;
+            },
+            
+            updateEnemy(enemy, dt) {
+                if (enemy.type === 'chaser') {
+                    const dx = this.player.x - enemy.x;
+                    const dy = this.player.y - enemy.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist > 0) {
+                        const speed = 2;
+                        enemy.vx = (dx / dist) * speed;
+                        enemy.vy = (dy / dist) * speed;
+                    }
+                } else if (enemy.type === 'orbiter') {
+                    enemy.angle += dt * 2;
+                    const targetX = this.width / 2 + Math.cos(enemy.angle) * enemy.orbitRadius;
+                    const targetY = this.height / 2 + Math.sin(enemy.angle) * enemy.orbitRadius;
+                    
+                    enemy.vx = (targetX - enemy.x) * 0.1;
+                    enemy.vy = (targetY - enemy.y) * 0.1;
+                } else if (enemy.type === 'shooter') {
+                    // Stationary but shoots
+                    enemy.vx *= 0.95;
+                    enemy.vy *= 0.95;
+                    
+                    enemy.shootCooldown -= dt;
+                    if (enemy.shootCooldown <= 0) {
+                        this.enemyShoot(enemy);
+                        enemy.shootCooldown = 2;
+                    }
+                }
+                
+                enemy.x += enemy.vx * dt * 60;
+                enemy.y += enemy.vy * dt * 60;
+                
+                // Collision with player
+                if (this.player.invulnerable <= 0) {
+                    const dx = this.player.x - enemy.x;
+                    const dy = this.player.y - enemy.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < this.player.radius + enemy.radius) {
+                        this.hitPlayer();
+                    }
+                }
+            },
+            
+            enemyShoot(enemy) {
+                const dx = this.player.x - enemy.x;
+                const dy = this.player.y - enemy.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 0) {
+                    this.enemies.push({
+                        x: enemy.x,
+                        y: enemy.y,
+                        vx: (dx / dist) * 4,
+                        vy: (dy / dist) * 4,
+                        radius: 5,
+                        type: 'bullet',
+                        health: 1
+                    });
+                    
+                    this.playSound(300, 0.1, 'square');
+                }
+            },
+            
+            collectCrystal(crystal) {
+                this.score += 100 * (1 + this.combo);
+                this.combo++;
+                this.comboTimer = 2;
+                
+                this.playSound(800 + this.combo * 50, 0.15, 'sine');
+                
+                // Particles
+                if (!this.settings.reducedMotion) {
+                    for (let i = 0; i < 10; i++) {
+                        const angle = (Math.PI * 2 * i) / 10;
+                        this.particles.push({
+                            x: crystal.x,
+                            y: crystal.y,
+                            vx: Math.cos(angle) * 100,
+                            vy: Math.sin(angle) * 100,
+                            radius: 3,
+                            color: '#8a2be2',
+                            life: 0.5,
+                            maxLife: 0.5,
+                            alpha: 1
+                        });
+                    }
+                }
+            },
+            
+            hitPlayer() {
+                this.lives--;
+                this.player.invulnerable = 2;
+                this.combo = 0;
+                this.comboTimer = 0;
+                this.shakeAmount = 10;
+                
+                this.playSound(200, 0.3, 'sawtooth');
+                
+                // Explosion particles
+                if (!this.settings.reducedMotion) {
+                    for (let i = 0; i < 20; i++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        this.particles.push({
+                            x: this.player.x,
+                            y: this.player.y,
+                            vx: Math.cos(angle) * 200,
+                            vy: Math.sin(angle) * 200,
+                            radius: 4,
+                            color: '#ff0000',
+                            life: 0.8,
+                            maxLife: 0.8,
+                            alpha: 1
+                        });
+                    }
+                }
+                
+                if (this.lives <= 0) {
+                    this.gameOver();
+                }
+            },
+            
+            completeLevel() {
+                this.state = 'ended';
+                
+                // Update save data
+                if (!this.saveData.completedLevels.includes(this.currentLevel)) {
+                    this.saveData.completedLevels.push(this.currentLevel);
+                }
+                
+                if (this.currentLevel < this.maxLevel) {
+                    this.saveData.unlockedLevels = Math.max(this.saveData.unlockedLevels, this.currentLevel + 1);
+                }
+                
+                if (!this.saveData.bestScores[this.currentLevel] || this.score > this.saveData.bestScores[this.currentLevel]) {
+                    this.saveData.bestScores[this.currentLevel] = this.score;
+                }
+                
+                this.saveData.totalScore += this.score;
+                this.saveGame();
+                
+                // Show end screen
+                document.getElementById('endTitle').textContent = 'LEVEL COMPLETE!';
+                document.getElementById('endStats').innerHTML = `
+                    <div>Score: ${this.score}</div>
+                    <div>Lives Remaining: ${this.lives}</div>
+                    <div>Best Combo: ${this.combo}</div>
+                    <div>Total Score: ${this.saveData.totalScore}</div>
+                `;
+                document.getElementById('endScreen').classList.add('active');
+                
+                this.playSound(880, 0.5, 'sine');
+            },
+            
+            gameOver() {
+                this.state = 'ended';
+                
+                document.getElementById('endTitle').textContent = 'GAME OVER';
+                document.getElementById('endStats').innerHTML = `
+                    <div>Score: ${this.score}</div>
+                    <div>Level: ${this.currentLevel}</div>
+                    <div>Best Combo: ${this.combo}</div>
+                `;
+                document.getElementById('endScreen').classList.add('active');
+            },
+            
+            nextLevel() {
+                document.getElementById('endScreen').classList.remove('active');
+                if (this.currentLevel < this.maxLevel) {
+                    this.startLevel(this.currentLevel + 1);
+                } else {
+                    this.showScreen('title');
+                }
+            },
+            
+            retryLevel() {
+                document.getElementById('endScreen').classList.remove('active');
+                this.startLevel(this.currentLevel);
+            },
+            
+            pauseGame() {
+                this.state = 'paused';
+                this.showScreen('title');
+            },
+            
+            updateHUD() {
+                const hud = document.getElementById('hud');
+                hud.innerHTML = `
+                    <div>Level: ${this.currentLevel} / ${this.maxLevel}</div>
+                    <div>Score: ${this.score}</div>
+                    <div>Lives: ${'❤️'.repeat(this.lives)}</div>
+                    <div>Combo: x${this.combo}</div>
+                    <div>Energy: ${Math.floor(this.energy)}%</div>
+                    <div>Crystals: ${this.crystals.filter(c => c.collected).length} / ${this.crystals.length}</div>
+                `;
+            },
+            
+            // Rendering
+            render() {
+                const ctx = this.ctx;
+                
+                // Clear
+                ctx.fillStyle = this.settings.highContrast ? '#000' : '#0a0a1a';
+                ctx.fillRect(0, 0, this.width, this.height);
+                
+                // Apply screen shake
+                if (this.shakeAmount > 0 && !this.settings.reducedMotion) {
+                    ctx.save();
+                    ctx.translate(
+                        (Math.random() - 0.5) * this.shakeAmount,
+                        (Math.random() - 0.5) * this.shakeAmount
+                    );
+                }
+                
+                // Grid background
+                if (!this.settings.reducedMotion) {
+                    ctx.strokeStyle = this.settings.highContrast ? '#333' : 'rgba(138, 43, 226, 0.1)';
+                    ctx.lineWidth = 1;
+                    for (let x = 0; x < this.width; x += 50) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, 0);
+                        ctx.lineTo(x, this.height);
+                        ctx.stroke();
+                    }
+                    for (let y = 0; y < this.height; y += 50) {
+                        ctx.beginPath();
+                        ctx.moveTo(0, y);
+                        ctx.lineTo(this.width, y);
+                        ctx.stroke();
+                    }
+                }
+                
+                // Particles
+                this.particles.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.alpha;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.globalAlpha = 1;
+                
+                // Crystals
+                this.crystals.forEach(crystal => {
+                    if (crystal.collected) return;
+                    
+                    const pulseSize = 1 + Math.sin(crystal.pulse) * 0.2;
+                    
+                    ctx.save();
+                    ctx.translate(crystal.x, crystal.y);
+                    ctx.rotate(crystal.pulse * 0.5);
+                    
+                    // Glow
+                    if (!this.settings.reducedMotion) {
+                        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, crystal.radius * 3);
+                        gradient.addColorStop(0, this.settings.highContrast ? '#fff' : 'rgba(138, 43, 226, 0.3)');
+                        gradient.addColorStop(1, 'rgba(138, 43, 226, 0)');
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, crystal.radius * 3 * pulseSize, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    // Crystal
+                    ctx.fillStyle = this.settings.highContrast ? '#fff' : '#8a2be2';
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (Math.PI * 2 * i) / 6;
+                        const r = crystal.radius * pulseSize;
+                        const x = Math.cos(angle) * r;
+                        const y = Math.sin(angle) * r;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    ctx.restore();
+                });
+                
+                // Enemies
+                this.enemies.forEach(enemy => {
+                    const color = this.settings.highContrast ? '#fff' : 
+                                  enemy.type === 'bullet' ? '#ff00ff' :
+                                  enemy.type === 'shooter' ? '#ff0088' : '#ff0000';
+                    
+                    // Glow
+                    if (!this.settings.reducedMotion) {
+                        const gradient = ctx.createRadialGradient(enemy.x, enemy.y, 0, enemy.x, enemy.y, enemy.radius * 2);
+                        gradient.addColorStop(0, color + '66');
+                        gradient.addColorStop(1, color + '00');
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(enemy.x, enemy.y, enemy.radius * 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                
+                // Player trail
+                if (!this.settings.reducedMotion) {
+                    this.player.trail.forEach(t => {
+                        ctx.fillStyle = this.settings.highContrast ? 
+                                        `rgba(255, 255, 255, ${t.alpha * 0.3})` :
+                                        `rgba(138, 43, 226, ${t.alpha * 0.5})`;
+                        ctx.beginPath();
+                        ctx.arc(t.x, t.y, this.player.radius * 0.7, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                }
+                
+                // Player
+                if (this.player.invulnerable <= 0 || Math.floor(Date.now() / 100) % 2 === 0) {
+                    // Glow
+                    if (!this.settings.reducedMotion) {
+                        const gradient = ctx.createRadialGradient(
+                            this.player.x, this.player.y, 0,
+                            this.player.x, this.player.y, this.player.radius * 2.5
+                        );
+                        gradient.addColorStop(0, this.settings.highContrast ? '#fff' : 'rgba(0, 255, 255, 0.5)');
+                        gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(this.player.x, this.player.y, this.player.radius * 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    
+                    ctx.fillStyle = this.settings.highContrast ? '#fff' : '#00ffff';
+                    ctx.beginPath();
+                    ctx.arc(this.player.x, this.player.y, this.player.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Direction indicator
+                    if (this.player.vx !== 0 || this.player.vy !== 0) {
+                        const angle = Math.atan2(this.player.vy, this.player.vx);
+                        ctx.fillStyle = this.settings.highContrast ? '#000' : '#ffffff';
+                        ctx.beginPath();
+                        ctx.arc(
+                            this.player.x + Math.cos(angle) * this.player.radius * 0.5,
+                            this.player.y + Math.sin(angle) * this.player.radius * 0.5,
+                            3, 0, Math.PI * 2
+                        );
+                        ctx.fill();
+                    }
+                }
+                
+                // Time slow effect
+                if (this.slowTimeActive && this.energy > 0 && !this.settings.reducedMotion) {
+                    ctx.fillStyle = 'rgba(138, 43, 226, 0.1)';
+                    ctx.fillRect(0, 0, this.width, this.height);
+                }
+                
+                if (this.shakeAmount > 0) {
+                    ctx.restore();
+                }
+            }
+        };
+        
+        // Start game on load
+        window.addEventListener('load', () => {
+            game.init();
+        });
+    </script>
+</body>
+</html>
