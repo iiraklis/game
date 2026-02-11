@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ORBITAL DRIFT: ION STORM</title>
+    <style>
+        :root {
+            --bg: #05050a;
+            --primary: #00f2ff;
+            --secondary: #ff007b;
+            --text: #e0e0ff;
+            --panel: rgba(20, 20, 40, 0.9);
+        }
+        * { box-sizing: border-box; touch-action: none; user-select: none; }
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background: var(--bg); color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        canvas { display: block; background: #000; box-shadow: 0 0 20px rgba(0,242,255,0.2); }
+
+        .ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .ui-layer.hidden { opacity: 0; pointer-events: none; visibility: hidden; }
+        .panel {
+            background: var(--panel); border: 2px solid var(--primary);
+            padding: 2rem; border-radius: 12px; pointer-events: auto;
+            text-align: center; max-width: 90%; width: 400px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 15px rgba(0,242,255,0.1);
+        }
+        h1 { margin: 0 0 1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 4px; font-size: 2rem; text-shadow: 0 0 10px var(--primary); }
+        h2 { color: var(--secondary); margin-top: 0; }
+        .btn {
+            background: transparent; border: 1px solid var(--primary); color: var(--primary);
+            padding: 12px 24px; margin: 8px; cursor: pointer; font-weight: bold;
+            text-transform: uppercase; transition: all 0.2s; border-radius: 4px;
+            display: inline-block; min-width: 140px;
+        }
+        .btn:hover { background: var(--primary); color: #000; box-shadow: 0 0 15px var(--primary); }
+        .btn:active { transform: scale(0.95); }
+        .btn.locked { opacity: 0.4; cursor: not-allowed; border-color: #555; color: #555; }
+        
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%; padding: 15px;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            pointer-events: none; font-family: monospace; font-size: 1.2rem;
+        }
+        .stat-box { background: rgba(0,0,0,0.5); padding: 5px 15px; border-left: 3px solid var(--primary); }
+        
+        .grid-select { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0; }
+        .lvl-btn { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--primary); cursor: pointer; }
+        
+        #joystick-zone {
+            position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px;
+            background: rgba(255,255,255,0.1); border-radius: 50%; display: none;
+        }
+        #action-zone {
+            position: absolute; bottom: 40px; right: 40px; width: 100px; height: 100px;
+            background: rgba(0,242,255,0.2); border-radius: 50%; display: none;
+            align-items: center; justify-content: center; font-weight: bold; border: 2px solid var(--primary);
+        }
+
+        .settings-row { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; }
+        input[type=range] { accent-color: var(--primary); }
+
+        @media (max-width: 768px) {
+            #joystick-zone, #action-zone { display: flex; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="hud">
+        <div class="stat-box">LVL: <span id="hud-level">1</span><br>ION: <span id="hud-score">0</span></div>
+        <div class="stat-box" style="text-align: right;">COMBO: x<span id="hud-combo">1.0</span><br>ENERGY: <span id="hud-energy">100</span>%</div>
+    </div>
+
+    <div id="screen-title" class="ui-layer">
+        <div class="panel">
+            <h1>ION STORM</h1>
+            <p>Cosmic Junkyard Navigation</p>
+            <button class="btn" onclick="game.showScreen('level-select')">Start Mission</button>
+            <button class="btn" onclick="game.showScreen('settings')">Settings</button>
+            <button class="btn" onclick="game.showScreen('how-to')">How to Play</button>
+            <button class="btn" onclick="window.location.href='../index.html'">Main Menu</button>
+        </div>
+    </div>
+
+    <div id="screen-how-to" class="ui-layer hidden">
+        <div class="panel">
+            <h2>Instructions</h2>
+            <div style="text-align: left; font-size: 0.9rem; line-height: 1.4;">
+                <p>1. <b>WASD/Arrows</b> to move. <b>SPACE</b> to Pulse.</p>
+                <p>2. Hold <b>SHIFT or Click/Touch</b> to Grapple to Orbs.</p>
+                <p>3. Match Polarity: Blue grapple pulls, Pink grapple repels.</p>
+                <p>4. Collect <b>Ion Cores</b> to charge the warp gate.</p>
+                <p>5. Avoid the Scrap! Energy depletes on collision.</p>
+            </div>
+            <button class="btn" onclick="game.showScreen('title')">Back</button>
+        </div>
+    </div>
+
+    <div id="screen-settings" class="ui-layer hidden">
+        <div class="panel">
+            <h2>Settings</h2>
+            <div class="settings-row">
+                <span>Master Vol</span>
+                <input type="range" id="vol-master" min="0" max="1" step="0.1" value="0.5">
+            </div>
+            <div class="settings-row">
+                <span>Reduce Motion</span>
+                <input type="checkbox" id="setting-motion">
+            </div>
+            <button class="btn" onclick="game.showScreen('title')">Save</button>
+        </div>
+    </div>
+
+    <div id="screen-level-select" class="ui-layer hidden">
+        <div class="panel">
+            <h2>Select Sector</h2>
+            <div class="grid-select" id="level-grid"></div>
+            <button class="btn" onclick="game.showScreen('title')">Back</button>
+        </div>
+    </div>
+
+    <div id="screen-result" class="ui-layer hidden">
+        <div class="panel">
+            <h1 id="result-title">MISSION CLEAR</h1>
+            <p id="result-stats">Score: 0 | Combo: 0</p>
+            <button class="btn" onclick="game.retryLevel()">Retry</button>
+            <button class="btn" id="btn-next" onclick="game.nextLevel()">Next Level</button>
+            <button class="btn" onclick="game.showScreen('title')">Menu</button>
+        </div>
+    </div>
+
+    <div id="joystick-zone"></div>
+    <div id="action-zone">PULSE</div>
+</div>
+
+<script>
+/** * AUDIO ENGINE (Web Audio API)
+ */
+const AudioEngine = (() => {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const masterGain = ctx.createGain();
+    masterGain.connect(ctx.destination);
+    masterGain.gain.value = 0.5;
+
+    const playNote = (freq, type, duration, vol) => {
+        if (ctx.state === 'suspended') ctx.resume();
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        g.gain.setValueAtTime(vol, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+    };
+
+    return {
+        setVolume: (v) => masterGain.gain.value = v,
+        sfxCollect: () => { playNote(440, 'square', 0.2, 0.1); playNote(880, 'square', 0.4, 0.05); },
+        sfxHit: () => { playNote(100, 'sawtooth', 0.3, 0.2); },
+        sfxGrapple: () => { playNote(200, 'sine', 0.5, 0.1); },
+        sfxWin: () => { [261, 329, 392, 523].forEach((f, i) => setTimeout(() => playNote(f, 'triangle', 0.5, 0.1), i * 100)); },
+        playMusic: () => {
+            // Simple procedural loop
+            setInterval(() => {
+                if (masterGain.gain.value > 0) {
+                    const notes = [130, 146, 164, 196];
+                    playNote(notes[Math.floor(Math.random() * notes.length)], 'sine', 2, 0.02);
+                }
+            }, 1000);
+        }
+    };
+})();
+
+/**
+ * MATH & UTILS
+ */
+const LCG = (seed) => {
+    let m = 0x80000000, a = 1103515245, c = 12345;
+    let state = seed;
+    return () => { state = (a * state + c) % m; return state / (m - 1); };
+};
+const seedFromDate = () => {
+    const d = new Date();
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+};
+const rand = LCG(seedFromDate());
+
+/**
+ * GAME ENGINE
+ */
+class Game {
+    constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.dpr = window.devicePixelRatio || 1;
+        this.resize();
+
+        this.state = 'TITLE';
+        this.levelsUnlocked = parseInt(localStorage.getItem('ion_storm_levels')) || 1;
+        this.bestScore = parseInt(localStorage.getItem('ion_storm_score')) || 0;
+        
+        this.player = { x: 0, y: 0, vx: 0, vy: 0, r: 12, angle: 0, energy: 100, pulse: 0 };
+        this.camera = { x: 0, y: 0, lerp: 0.1 };
+        this.particles = [];
+        this.entities = [];
+        this.input = { w:0, a:0, s:0, d:0, space:0, shift:0, touch: false, tx: 0, ty: 0 };
+        this.level = 1;
+        this.score = 0;
+        this.combo = 1.0;
+        this.comboTimer = 0;
+        this.shake = 0;
+        this.winCondition = 0;
+
+        this.initListeners();
+        this.createLevelGrid();
+        AudioEngine.playMusic();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+
+    resize() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width * this.dpr;
+        this.canvas.height = this.height * this.dpr;
+        this.ctx.scale(this.dpr, this.dpr);
+    }
+
+    initListeners() {
+        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('keydown', (e) => this.handleKey(e.code, 1));
+        window.addEventListener('keyup', (e) => this.handleKey(e.code, 0));
+        window.addEventListener('mousedown', () => this.input.shift = 1);
+        window.addEventListener('mouseup', () => this.input.shift = 0);
+        
+        // Touch events
+        this.canvas.addEventListener('touchstart', (e) => {
+            this.input.touch = true;
+            this.input.tx = e.touches[0].clientX;
+            this.input.ty = e.touches[0].clientY;
+            this.input.shift = 1;
+        });
+        this.canvas.addEventListener('touchend', () => { this.input.shift = 0; this.input.touch = false; });
+        
+        document.getElementById('vol-master').addEventListener('input', (e) => AudioEngine.setVolume(e.target.value));
+        document.getElementById('action-zone').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.triggerPulse();
+        });
+    }
+
+    handleKey(code, val) {
+        if (code === 'KeyW' || code === 'ArrowUp') this.input.w = val;
+        if (code === 'KeyA' || code === 'ArrowLeft') this.input.a = val;
+        if (code === 'KeyS' || code === 'ArrowDown') this.input.s = val;
+        if (code === 'KeyD' || code === 'ArrowRight') this.input.d = val;
+        if (code === 'Space' && val) this.triggerPulse();
+        if (code === 'ShiftLeft') this.input.shift = val;
+        if (code === 'Escape' && val) this.showScreen('title');
+    }
+
+    triggerPulse() {
+        if (this.player.energy > 10) {
+            this.player.pulse = 1.0;
+            this.player.energy -= 10;
+            this.shake = 10;
+            // Push nearby enemies
+            this.entities.forEach(e => {
+                if (e.type === 'scrap') {
+                    let dx = e.x - this.player.x;
+                    let dy = e.y - this.player.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < 150) {
+                        e.vx += (dx/dist) * 10;
+                        e.vy += (dy/dist) * 10;
+                    }
+                }
+            });
+        }
+    }
+
+    createLevelGrid() {
+        const grid = document.getElementById('level-grid');
+        grid.innerHTML = '';
+        for (let i = 1; i <= 10; i++) {
+            const b = document.createElement('div');
+            b.className = `lvl-btn ${i > this.levelsUnlocked ? 'locked' : ''}`;
+            b.textContent = i;
+            b.onclick = () => { if (i <= this.levelsUnlocked) this.startLevel(i); };
+            grid.appendChild(b);
+        }
+    }
+
+    showScreen(id) {
+        document.querySelectorAll('.ui-layer').forEach(l => l.classList.add('hidden'));
+        if (id === 'title') {
+            this.state = 'TITLE';
+            document.getElementById('screen-title').classList.remove('hidden');
+        } else if (id === 'level-select') {
+            this.createLevelGrid();
+            document.getElementById('screen-level-select').classList.remove('hidden');
+        } else {
+            document.getElementById('screen-' + id).classList.remove('hidden');
+        }
+    }
+
+    startLevel(num) {
+        this.level = num;
+        this.state = 'PLAYING';
+        this.score = 0;
+        this.combo = 1.0;
+        this.player = { x: 0, y: 0, vx: 0, vy: 0, r: 12, angle: 0, energy: 100, pulse: 0 };
+        this.entities = [];
+        this.particles = [];
+        this.winCondition = 5 + (num * 2);
+        
+        // Spawn Ion Cores
+        for (let i = 0; i < this.winCondition; i++) {
+            this.entities.push({
+                type: 'ion',
+                x: (rand() - 0.5) * 2000,
+                y: (rand() - 0.5) * 2000,
+                r: 8, color: '#00f2ff'
+            });
+        }
+
+        // Spawn Anchor Points (Grapple points)
+        for (let i = 0; i < 30; i++) {
+            this.entities.push({
+                type: 'anchor',
+                x: (rand() - 0.5) * 2500,
+                y: (rand() - 0.5) * 2500,
+                r: 15,
+                polarity: rand() > 0.5 ? 1 : -1 // 1: Pull, -1: Repel
+            });
+        }
+
+        // Spawn Scrap (Enemies)
+        for (let i = 0; i < 20 + num * 5; i++) {
+            this.entities.push({
+                type: 'scrap',
+                x: (rand() - 0.5) * 2500,
+                y: (rand() - 0.5) * 2500,
+                vx: (rand()-0.5)*2, vy: (rand()-0.5)*2,
+                r: 10 + rand() * 20,
+                rot: 0, vrot: rand() * 0.1
+            });
+        }
+
+        document.querySelectorAll('.ui-layer').forEach(l => l.classList.add('hidden'));
+    }
+
+    update(dt) {
+        if (this.state !== 'PLAYING') return;
+
+        // Player movement
+        const acc = 0.5;
+        if (this.input.w) this.player.vy -= acc;
+        if (this.input.s) this.player.vy += acc;
+        if (this.input.a) this.player.vx -= acc;
+        if (this.input.d) this.player.vx += acc;
+
+        // Grapple logic
+        if (this.input.shift) {
+            let closest = null;
+            let minDist = 300;
+            this.entities.forEach(e => {
+                if (e.type === 'anchor') {
+                    let d = Math.sqrt((e.x-this.player.x)**2 + (e.y-this.player.y)**2);
+                    if (d < minDist) { minDist = d; closest = e; }
+                }
+            });
+            if (closest) {
+                let dx = closest.x - this.player.x;
+                let dy = closest.y - this.player.y;
+                let force = closest.polarity * 0.8;
+                this.player.vx += (dx / minDist) * force;
+                this.player.vy += (dy / minDist) * force;
+                this.spawnParticle(this.player.x, this.player.y, closest.polarity > 0 ? '#00f2ff' : '#ff007b', 1);
+                if (Math.random() > 0.9) AudioEngine.sfxGrapple();
+            }
+        }
+
+        this.player.vx *= 0.98;
+        this.player.vy *= 0.98;
+        this.player.x += this.player.vx;
+        this.player.y += this.player.vy;
+        this.player.pulse *= 0.9;
+
+        // Camera follow
+        this.camera.x += (this.player.x - this.camera.x) * this.camera.lerp;
+        this.camera.y += (this.player.y - this.camera.y) * this.camera.lerp;
+
+        // Update Entities
+        for (let i = this.entities.length - 1; i >= 0; i--) {
+            let e = this.entities[i];
+            if (e.type === 'scrap') {
+                e.x += e.vx; e.y += e.vy;
+                e.rot += e.vrot;
+                // Collision
+                let d = Math.sqrt((e.x-this.player.x)**2 + (e.y-this.player.y)**2);
+                if (d < e.r + this.player.r) {
+                    this.player.energy -= 15;
+                    this.shake = 15;
+                    AudioEngine.sfxHit();
+                    this.entities.splice(i, 1);
+                    continue;
+                }
+            } else if (e.type === 'ion') {
+                let d = Math.sqrt((e.x-this.player.x)**2 + (e.y-this.player.y)**2);
+                if (d < e.r + this.player.r) {
+                    this.score += Math.floor(100 * this.combo);
+                    this.combo += 0.2;
+                    this.comboTimer = 120;
+                    this.player.energy = Math.min(100, this.player.energy + 10);
+                    AudioEngine.sfxCollect();
+                    this.spawnParticle(e.x, e.y, '#00f2ff', 15);
+                    this.entities.splice(i, 1);
+                    this.winCondition--;
+                    if (this.winCondition <= 0) this.endLevel(true);
+                }
+            }
+        }
+
+        if (this.comboTimer > 0) {
+            this.comboTimer--;
+            if (this.comboTimer === 0) this.combo = 1.0;
+        }
+
+        if (this.player.energy <= 0) this.endLevel(false);
+
+        // HUD Update
+        document.getElementById('hud-level').textContent = this.level;
+        document.getElementById('hud-score').textContent = this.score;
+        document.getElementById('hud-combo').textContent = this.combo.toFixed(1);
+        document.getElementById('hud-energy').textContent = Math.ceil(this.player.energy);
+
+        // Particles
+        this.particles.forEach((p, i) => {
+            p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+            if (p.life <= 0) this.particles.splice(i, 1);
+        });
+
+        if (this.shake > 0) this.shake *= 0.9;
+    }
+
+    spawnParticle(x, y, color, count) {
+        for (let i = 0; i < count; i++) {
+            this.particles.push({
+                x, y, 
+                vx: (Math.random() - 0.5) * 5, 
+                vy: (Math.random() - 0.5) * 5,
+                life: 1.0, color
+            });
+        }
+    }
+
+    endLevel(win) {
+        this.state = 'RESULT';
+        const scr = document.getElementById('screen-result');
+        scr.classList.remove('hidden');
+        document.getElementById('result-title').textContent = win ? "MISSION SUCCESS" : "MISSION FAILED";
+        document.getElementById('result-title').style.color = win ? "var(--primary)" : "var(--secondary)";
+        document.getElementById('result-stats').textContent = `Score: ${this.score} | Combo Max: ${this.combo.toFixed(1)}`;
+        
+        if (win) {
+            AudioEngine.sfxWin();
+            if (this.level === this.levelsUnlocked && this.level < 10) {
+                this.levelsUnlocked++;
+                localStorage.setItem('ion_storm_levels', this.levelsUnlocked);
+            }
+            document.getElementById('btn-next').style.display = 'inline-block';
+        } else {
+            document.getElementById('btn-next').style.display = 'none';
+        }
+    }
+
+    retryLevel() { this.startLevel(this.level); }
+    nextLevel() { if (this.level < 10) this.startLevel(this.level + 1); }
+
+    draw() {
+        const { ctx, width, height } = this;
+        ctx.clearRect(0, 0, width, height);
+
+        ctx.save();
+        // Screen Shake
+        if (this.shake > 0) {
+            ctx.translate((Math.random()-0.5)*this.shake, (Math.random()-0.5)*this.shake);
+        }
+        ctx.translate(width/2 - this.camera.x, height/2 - this.camera.y);
+
+        // Draw Background Stars
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 50; i++) {
+            let sx = (Math.floor(this.camera.x / 2000) * 2000) + (i * 4321) % 2000 - 1000;
+            let sy = (Math.floor(this.camera.y / 2000) * 2000) + (i * 7890) % 2000 - 1000;
+            ctx.globalAlpha = 0.3;
+            ctx.fillRect(sx, sy, 2, 2);
+        }
+        ctx.globalAlpha = 1.0;
+
+        // Draw Entities
+        this.entities.forEach(e => {
+            if (e.type === 'anchor') {
+                ctx.strokeStyle = e.polarity > 0 ? '#00f2ff' : '#ff007b';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+                ctx.stroke();
+                // Glow
+                ctx.shadowBlur = 10; ctx.shadowColor = ctx.strokeStyle;
+                ctx.stroke(); ctx.shadowBlur = 0;
+            } else if (e.type === 'ion') {
+                ctx.fillStyle = '#00f2ff';
+                ctx.beginPath();
+                ctx.moveTo(e.x, e.y - e.r);
+                ctx.lineTo(e.x + e.r, e.y);
+                ctx.lineTo(e.x, e.y + e.r);
+                ctx.lineTo(e.x - e.r, e.y);
+                ctx.fill();
+            } else if (e.type === 'scrap') {
+                ctx.fillStyle = '#555';
+                ctx.save();
+                ctx.translate(e.x, e.y);
+                ctx.rotate(e.rot);
+                ctx.fillRect(-e.r/2, -e.r/2, e.r, e.r);
+                ctx.restore();
+            }
+        });
+
+        // Draw Particles
+        this.particles.forEach(p => {
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x, p.y, 3, 3);
+        });
+        ctx.globalAlpha = 1.0;
+
+        // Draw Player
+        ctx.save();
+        ctx.translate(this.player.x, this.player.y);
+        ctx.rotate(Math.atan2(this.player.vy, this.player.vx));
+        
+        // Pulse Effect
+        if (this.player.pulse > 0.1) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.beginPath();
+            ctx.arc(0, 0, this.player.pulse * 100, 0, Math.PI*2);
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = 'var(--primary)';
+        ctx.beginPath();
+        ctx.moveTo(15, 0); ctx.lineTo(-10, -10); ctx.lineTo(-10, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        ctx.restore();
+    }
+
+    loop(t) {
+        this.update(16);
+        this.draw();
+        requestAnimationFrame((t) => this.loop(t));
+    }
+}
+
+const game = new Game();
+</script>
+</body>
+</html>
