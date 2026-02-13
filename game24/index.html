@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Neon Soccer Striker</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #mainMenuBtn {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 1000;
+            padding: 10px 14px;
+            border: none;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #000000;
+            font-weight: 700;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <button id="mainMenuBtn" onclick="window.location.href='../index.html'">Main Menu</button>
+    <canvas id="game"></canvas>
+    <script>
+        // ===== CONSTANTS AND SETUP =====
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const dailySeed = '2026-02-13';
+        const isMobile = 'ontouchstart' in window;
+        const ratio = window.devicePixelRatio || 1;
+        const GAME_ASPECT = 16 / 9;
+
+        // ===== PRNG FOR PROCEDURAL ELEMENTS =====
+        function hash(str) {
+            let h = 0;
+            for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+            return h;
+        }
+        let prngSeed = hash(dailySeed);
+        function prng() {
+            prngSeed = (prngSeed * 1664525 + 1013904223) >>> 0;
+            return prngSeed / 4294967296;
+        }
+
+        // ===== AUDIO SETUP (PROCEDURAL WebAudio) =====
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let musicPlaying = false;
+        let musicInterval;
+        function playSFX(type) {
+            if (!settings.sfxVol || settings.mute) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(settings.sfxVol, audioCtx.currentTime);
+            if (type === 'kick') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            } else if (type === 'goal') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(659, audioCtx.currentTime + 0.3);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+            } else if (type === 'tackle') {
+                osc.type = 'square';
+                osc.frequency.value = 150;
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+            } else if (type === 'dash') {
+                osc.type = 'triangle';
+                osc.frequency.value = 600;
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            } else if (type === 'collect') {
+                osc.type = 'sine';
+                osc.frequency.value = 880;
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            }
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.4);
+        }
+        function playNote(freq, duration, vol = 0.3) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(vol * settings.musicVol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+        function startMusic() {
+            if (musicPlaying || settings.mute || !settings.musicVol) return;
+            musicPlaying = true;
+            const notes = [196, 220, 247, 262, 294, 330, 370, 392]; // Stadium chant scale
+            let idx = 0;
+            musicInterval = setInterval(() => {
+                playNote(notes[idx % notes.length], 0.15, 0.2);
+                idx++;
+            }, 400);
+        }
+        function stopMusic() {
+            musicPlaying = false;
+            if (musicInterval) clearInterval(musicInterval);
+        }
+
+        // ===== SETTINGS AND PROGRESS (localStorage) =====
+        let settings = { musicVol: 0.5, sfxVol: 0.8, mute: false, reducedMotion: false, highContrast: false };
+        let progress = { unlocked: 1, bestScores: Array(11).fill(0) }; // 0-9 levels 1-10, 10 endless
+        function loadSettings() {
+            try {
+                const saved = localStorage.getItem('neonSoccerSettings');
+                if (saved) settings = { ...settings, ...JSON.parse(saved) };
+            } catch {}
+        }
+        function saveSettings() {
+            localStorage.setItem('neonSoccerSettings', JSON.stringify(settings));
+        }
+        function loadProgress() {
+            try {
+                const saved = localStorage.getItem('neonSoccerProgress');
+                if (saved) progress = { ...progress, ...JSON.parse(saved) };
+            } catch {}
+        }
+        function saveProgress() {
+            localStorage.setItem('neonSoccerProgress', JSON.stringify(progress));
+        }
+        loadSettings();
+        loadProgress();
+
+        // ===== GAME STATE =====
+        let state = 'title';
+        let currentLevel = 1;
+        let isEndless = false;
+        let score = 0;
+        let combo = 1;
+        let comboTimer = 0;
+        let goals = 0;
+        let requiredGoals = 1;
+        let health = 3;
+        let energy = 100;
+        let dashing = false;
+        let paused = false;
+        let shakeAmount = 0;
+        let flashColor = 0;
+        let flashTimer = 0;
+
+        // Game Objects
+        let player = { x: 0, y: 0, vx: 0, vy: 0, size: 20, lastDx: 1, lastDy: 0 };
+        let ball = { x: 0, y: 0, vx: 0, vy: 0, size: 12, trail: [] };
+        let defenders = [];
+        let goalie = null;
+        let powerups = [];
+        let walls = [];
+        let particles = [];
+        let goalRect = { x: 0, y: 0, w: 0, h: 0 };
+
+        // Controls
+        let keys = {};
+        let touchJoy = { active: false, cx: 0, cy: 0, dx: 0, dy: 0 };
+        let touchDash = false;
+        let touchShoot = false;
+        window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if (e.key === 'Escape') e.preventDefault(); });
+        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        canvas.addEventListener('touchstart', handleTouch, { passive: false });
+        canvas.addEventListener('touchmove', handleTouch, { passive: false });
+        canvas.addEventListener('touchend', handleTouch, { passive: false });
+        canvas.addEventListener('click', handleClick);
+        canvas.addEventListener('mousedown', handleClick);
+
+        function handleTouch(e) {
+            e.preventDefault();
+            const touches = e.changedTouches ? Array.from(e.changedTouches) : [];
+            for (let touch of touches) {
+                const x = touch.clientX;
+                const y = touch.clientY;
+                if (state === 'game' && !paused) {
+                    if (x < logicalW * 0.3 && y > logicalH * 0.6) {
+                        // Joystick
+                        if (!touchJoy.active) {
+                            touchJoy.active = true;
+                            touchJoy.cx = x;
+                            touchJoy.cy = y;
+                        }
+                    } else if (x > logicalW * 0.65 && y > logicalH * 0.75 && y < logicalH * 0.85) {
+                        touchDash = true;
+                    } else if (x > logicalW * 0.65 && y > logicalH * 0.65 && y < logicalH * 0.75) {
+                        touchShoot = true;
+                    }
+                } else {
+                    handleUIClick(x, y);
+                }
+            }
+            if (e.type === 'touchend') {
+                touchJoy.active = false;
+                touchDash = false;
+                touchShoot = false;
+            }
+        }
+        function handleClick(e) {
+            handleUIClick(e.offsetX, e.offsetY);
+        }
+
+        // ===== RESIZE HANDLING (RESPONSIVE) =====
+        let logicalW = 1200;
+        let logicalH = 800;
+        function resize() {
+            logicalW = window.innerWidth;
+            logicalH = window.innerHeight;
+            if (logicalW / logicalH > GAME_ASPECT) {
+                logicalW = logicalH * GAME_ASPECT;
+            } else {
+                logicalH = logicalW / GAME_ASPECT;
+            }
+            canvas.width = logicalW * ratio;
+            canvas.height = logicalH * ratio;
+            canvas.style.width = `${logicalW}px`;
+            canvas.style.height = `${logicalH}px`;
+            ctx.scale(ratio, ratio);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // ===== LEVEL GENERATION =====
+        function generateLevel(lvl, endless) {
+            prngSeed = hash(dailySeed + lvl);
+            const startX = logicalW * 0.1;
+            const goalX = logicalW * 0.9;
+            const goalY = logicalH * 0.5;
+            const goalWidth = 60;
+            const goalHeight = 160;
+
+            // Walls
+            walls = [
+                { x: 0, y: 0, w: logicalW, h: 40 }, // Top
+                { x: 0, y: logicalH - 40, w: logicalW, h: 40 }, // Bottom
+                { x: 0, y: 40, w: 40, h: logicalH - 80 }, // Left
+                { x: logicalW - 40, y: 40, h: logicalH - 80, w: 40 } // Right (goal open? No wall for goal, but posts)
+            ];
+            // Goal posts
+            walls.push({ x: goalX - goalWidth/2, y: goalY - goalHeight/2, w: 10, h: goalHeight });
+            walls.push({ x: goalX + goalWidth/2 - 10, y: goalY - goalHeight/2, w: 10, h: goalHeight });
+
+            goalRect = { x: goalX - goalWidth/2, y: goalY - goalHeight/2, w: goalWidth, h: goalHeight };
+
+            // Player and ball start
+            player.x = startX;
+            player.y = goalY;
+            ball.x = player.x + 20;
+            ball.y = player.y;
+            ball.vx = 0;
+            ball.vy = 0;
+            ball.trail = [];
+
+            // Defenders
+            const numDef = Math.max(1, Math.floor(lvl * 0.8));
+            const defSpeed = 140 + lvl * 12;
+            defenders = [];
+            for (let i = 0; i < numDef; i++) {
+                defenders.push({
+                    x: prng() * 0.3 + goalX,
+                    y: prng() * (logicalH - 80) + 40,
+                    vx: 0,
+                    vy: 0,
+                    size: 18,
+                    speed: defSpeed
+                });
+            }
+
+            // Goalie (lvl 3+)
+            goalie = lvl >= 3 ? {
+                x: goalX - 30,
+                y: goalY,
+                vx: 0,
+                vy: 0,
+                size: 28,
+                speed: 180 + lvl * 8,
+                patrolRange: 120
+            } : null;
+
+            // Powerups
+            const numPups = Math.floor((lvl - 1) / 2) + (endless ? 1 : 0);
+            powerups = [];
+            for (let i = 0; i < numPups; i++) {
+                powerups.push({
+                    x: prng() * (logicalW * 0.6) + 100,
+                    y: prng() * (logicalH - 100) + 50,
+                    size: 15,
+                    collected: false
+                });
+            }
+        }
+
+        // ===== UTILITY FUNCTIONS =====
+        function dist(ax, ay, bx, by) {
+            const dx = ax - bx;
+            const dy = ay - by;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        function normalize(dx, dy) {
+            const len = Math.sqrt(dx * dx + dy * dy);
+            return len > 0 ? { x: dx / len, y: dy / len } : { x: 0, y: 0 };
+        }
+        function rectCircleCollide(rx, ry, rw, rh, cx, cy, r) {
+            return cx + r > rx && cx - r < rx + rw && cy + r > ry && cy - r < ry + rh;
+        }
+        function resolveWallCollide(obj, wall) {
+            let collided = false;
+            if (obj.x + obj.size > wall.x && obj.x - obj.size < wall.x + wall.w &&
+                obj.y + obj.size > wall.y && obj.y - obj.size < wall.y + wall.h) {
+                const dx = obj.x - (wall.x + wall.w / 2);
+                const dy = obj.y - (wall.y + wall.h / 2);
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    obj.x = dx > 0 ? wall.x + obj.size : wall.x + wall.w - obj.size;
+                } else {
+                    obj.y = dy > 0 ? wall.y + obj.size : wall.y + wall.h - obj.size;
+                }
+                collided = true;
+            }
+            return collided;
+        }
+        function addParticles(x, y, color, count = 12, speed = 150) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x, y,
+                    vx: (prng() - 0.5) * speed,
+                    vy: (prng() - 0.5) * speed,
+                    life: 1.0,
+                    maxLife: 1.0,
+                    color,
+                    size: prng() * 4 + 2
+                });
+            }
+        }
+
+        // ===== START LEVEL =====
+        function startLevel(lvl, endless = false) {
+            isEndless = endless;
+            currentLevel = lvl;
+            requiredGoals = endless ? Infinity : lvl;
+            generateLevel(lvl, endless);
+            score = 0;
+            combo = 1;
+            comboTimer = 0;
+            goals = 0;
+            health = 3;
+            energy = 100;
+            player.vx = 0;
+            player.vy = 0;
+            ball.vx = 0;
+            ball.vy = 0;
+            defenders.forEach(d => { d.vx = 0; d.vy = 0; });
+            particles = [];
+            state = 'game';
+            paused = false;
+            startMusic();
+            saveProgress();
+        }
+
+        // ===== MAIN LOOP =====
+        let lastTime = 0;
+        function gameLoop(time) {
+            const delta = Math.min((time - lastTime) / 1000, 0.05);
+            lastTime = time;
+
+            if (settings.reducedMotion) {
+                shakeAmount *= 0.8;
+            }
+
+            if (state === 'game' && !paused) {
+                updateGame(delta);
+            }
+            updateParticles(delta);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        requestAnimationFrame(gameLoop);
+
+        function updateGame(delta) {
+            const moveSpeed = 280;
+            const dashMult = 2.2;
+            const kickPower = 650;
+            const ballFriction = 0.96;
+            const objFriction = 0.92;
+
+            // Input
+            let dx = 0, dy = 0;
+            if (keys['d'] || keys['arrowright']) dx += 1;
+            if (keys['a'] || keys['arrowleft']) dx -= 1;
+            if (keys['w'] || keys['arrowup']) dy -= 1;
+            if (keys['s'] || keys['arrowdown']) dy += 1;
+            if (touchJoy.active) {
+                touchJoy.dx = (e.touches[0]?.clientX || 0) - touchJoy.cx;
+                touchJoy.dy = (e.touches[0]?.clientY || 0) - touchJoy.cy;
+                const len = dist(0, 0, touchJoy.dx, touchJoy.dy);
+                if (len > 0) {
+                    dx = (touchJoy.dx / len) * Math.min(1, len / 60);
+                    dy = (touchJoy.dy / len) * Math.min(1, len / 60);
+                }
+            }
+            if (dx || dy) {
+                const norm = normalize(dx, dy);
+                player.lastDx = norm.x;
+                player.lastDy = norm.y;
+            }
+
+            // Dash
+            dashing = (keys[' '] || touchDash) && energy > 5;
+            const curSpeed = (dashing ? moveSpeed * dashMult : moveSpeed) * delta;
+            player.vx = player.lastDx * curSpeed / delta;
+            player.vy = player.lastDy * curSpeed / delta;
+            if (dashing) {
+                energy -= 80 * delta;
+            } else {
+                energy = Math.min(100, energy + 40 * delta);
+            }
+
+            // Player movement and collisions
+            player.x += player.vx * delta;
+            player.y += player.vy * delta;
+            player.vx *= objFriction;
+            player.vy *= objFriction;
+            for (let wall of walls) {
+                if (resolveWallCollide(player, wall)) {
+                    shakeAmount = 0.15;
+                }
+            }
+
+            // Ball control / kick
+            let hasBall = dist(player.x, player.y, ball.x, ball.y) < 35;
+            if (hasBall && (keys['e'] || touchShoot)) {
+                hasBall = false;
+                const dir = normalize(player.lastDx, player.lastDy);
+                ball.vx = dir.x * kickPower + player.vx * 0.5;
+                ball.vy = dir.y * kickPower + player.vy * 0.5;
+                playSFX('kick');
+                addParticles(ball.x, ball.y, '#ffffff', 8);
+            }
+            if (hasBall) {
+                ball.x = player.x + player.lastDx * 25;
+                ball.y = player.y + player.lastDy * 15;
+                ball.vx = player.vx * 0.6;
+                ball.vy = player.vy * 0.6;
+            } else {
+                // Ball physics
+                ball.x += ball.vx * delta;
+                ball.y += ball.vy * delta;
+                ball.vx *= ballFriction;
+                ball.vy *= ballFriction;
+                ball.trail.push({ x: ball.x, y: ball.y });
+                if (ball.trail.length > 15) ball.trail.shift();
+
+                // Ball wall collisions
+                for (let wall of walls) {
+                    resolveWallCollide(ball, wall);
+                }
+
+                // Ball pickup
+                if (dist(player.x, player.y, ball.x, ball.y) < 35) {
+                    hasBall = true;
+                }
+            }
+
+            // Goal check
+            if (rectCircleCollide(goalRect.x, goalRect.y, goalRect.w, goalRect.h, ball.x, ball.y, ball.size)) {
+                goals++;
+                comboTimer = 4.0;
+                if (comboTimer > 0) combo++;
+                score += 100 * combo;
+                playSFX('goal');
+                addParticles(goalRect.x + goalRect.w / 2, goalRect.y + goalRect.h / 2, '#ffd700', 30, 250);
+                flashColor = 0x00ff00;
+                flashTimer = 0.5;
+                shakeAmount = 0.4;
+                // Reset
+                player.x = logicalW * 0.1;
+                player.y = logicalH * 0.5;
+                player.vx = 0;
+                player.vy = 0;
+                ball.x = player.x + 20;
+                ball.y = player.y;
+                ball.vx = 0;
+                ball.vy = 0;
+                ball.trail = [];
+                // Respawn defenders away
+                defenders.forEach(d => {
+                    d.x = logicalW * 0.85 + (prng() - 0.5) * 100;
+                    d.y = 40 + prng() * (logicalH - 80);
+                });
+                if (goalie) {
+                    goalie.x = logicalW * 0.88;
+                    goalie.y = logicalH * 0.5;
+                }
+            }
+
+            // Powerups collect
+            for (let i = powerups.length - 1; i >= 0; i--) {
+                const pup = powerups[i];
+                if (!pup.collected && dist(player.x, player.y, pup.x, pup.y) < player.size + pup.size) {
+                    pup.collected = true;
+                    energy = Math.min(100, energy + 50);
+                    score += 25;
+                    playSFX('collect');
+                    addParticles(pup.x, pup.y, '#00ff88', 12);
+                    powerups.splice(i, 1);
+                }
+            }
+
+            // Defenders AI and collisions
+            for (let def of defenders) {
+                // Chase ball
+                const bdx = ball.x - def.x;
+                const bdy = ball.y - def.y;
+                const blen = dist(def.x, def.y, ball.x, ball.y);
+                if (blen > 0) {
+                    const dir = normalize(bdx, bdy);
+                    def.vx = dir.x * def.speed;
+                    def.vy = dir.y * def.speed;
+                }
+                def.x += def.vx * delta;
+                def.y += def.vy * delta;
+                def.vx *= objFriction;
+                def.vy *= objFriction;
+
+                // Wall collide
+                for (let wall of walls) {
+                    resolveWallCollide(def, wall);
+                }
+
+                // Tackle ball
+                if (dist(def.x, def.y, ball.x, ball.y) < def.size + ball.size) {
+                    ball.vx += (prng() - 0.5) * 300;
+                    ball.vy += (prng() - 0.5) * 300;
+                    playSFX('tackle');
+                    addParticles(ball.x, ball.y, '#ff4444', 15);
+                    shakeAmount = 0.2;
+                }
+
+                // Tackle player
+                if (dist(def.x, def.y, player.x, player.y) < def.size + player.size) {
+                    health--;
+                    playSFX('tackle');
+                    addParticles(player.x, player.y, '#ff0000', 20);
+                    shakeAmount = 0.25;
+                    player.vx += (prng() - 0.5) * 200;
+                    player.vy += (prng() - 0.5) * 200;
+                    if (health <= 0) {
+                        endGame(false);
+                        return;
+                    }
+                }
+            }
+
+            // Goalie AI and collisions
+            if (goalie) {
+                const gdx = ball.x - goalie.x;
+                const gdy = ball.y - goalie.y;
+                const glen = dist(goalie.x, goalie.y, ball.x, ball.y);
+                if (glen < 150) {
+                    // Chase
+                    const dir = normalize(gdx, gdy);
+                    goalie.vx = dir.x * goalie.speed * 0.7;
+                    goalie.vy = dir.y * goalie.speed * 0.7;
+                } else {
+                    // Patrol
+                    goalie.vy += Math.sin(Date.now() * 0.002 + goalie.x) * 100 * delta;
+                    goalie.vy = Math.max(-200, Math.min(200, goalie.vy));
+                }
+                goalie.x += goalie.vx * delta;
+                goalie.y += goalie.vy * delta;
+                goalie.vx *= objFriction * 0.9;
+                goalie.vy *= objFriction * 0.9;
+
+                // Goalie bounds
+                if (goalie.y < goalRect.y + 20) goalie.y = goalRect.y + 20;
+                if (goalie.y > goalRect.y + goalRect.h - 20) goalie.y = goalRect.y + goalRect.h - 20;
+                if (goalie.x < goalRect.x - 20) goalie.x = goalRect.x - 20;
+
+                // Tackle
+                if (dist(goalie.x, goalie.y, ball.x, ball.y) < goalie.size + ball.size) {
+                    ball.vx += (prng() - 0.5) * 400;
+                    ball.vy += (prng() - 0.5) * 400;
+                    playSFX('tackle');
+                    addParticles(ball.x, ball.y, '#ffaa00', 18);
+                    shakeAmount = 0.3;
+                }
+            }
+
+            // Combo timer
+            if (comboTimer > 0) {
+                comboTimer -= delta;
+                if (comboTimer <= 0) combo = 1;
+            }
+
+            // Check win
+            if (goals >= requiredGoals && !isEndless) {
+                endGame(true);
+            }
+
+            // Pause
+            if (keys['p'] || keys['escape']) {
+                paused = !paused;
+                keys['p'] = false;
+                keys['escape'] = false;
+            }
+        }
+
+        function updateParticles(delta) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx * delta;
+                p.y += p.vy * delta;
+                p.vx *= 0.97;
+                p.vy *= 0.97;
+                p.life -= delta * 2;
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                p.alpha = p.life / p.maxLife;
+            }
+        }
+
+        function endGame(win) {
+            stopMusic();
+            if (win) {
+                if (currentLevel + 1 > progress.unlocked) progress.unlocked = currentLevel + 1;
+            }
+            const thisScore = score;
+            if (isEndless) {
+                progress.bestScores[10] = Math.max(progress.bestScores[10], goals);
+            } else {
+                progress.bestScores[currentLevel - 1] = Math.max(progress.bestScores[currentLevel - 1], thisScore);
+            }
+            saveProgress();
+            state = 'end';
+        }
+
+        // ===== RENDER =====
+        function draw() {
+            ctx.clearRect(0, 0, logicalW, logicalH);
+
+            // Shake and flash
+            let shakeX = 0, shakeY = 0;
+            if (shakeAmount > 0 && !settings.reducedMotion) {
+                shakeX = (prng() - 0.5) * shakeAmount * 20;
+                shakeY = (prng() - 0.5) * shakeAmount * 20;
+                shakeAmount -= 0.04;
+            }
+            if (flashTimer > 0) {
+                ctx.fillStyle = `rgba(${flashColor >> 16 & 255}, ${flashColor >> 8 & 255}, ${flashColor & 255}, ${flashTimer})`;
+                ctx.fillRect(0, 0, logicalW, logicalH);
+                flashTimer -= 0.03;
+            }
+            ctx.save();
+            ctx.translate(shakeX, shakeY);
+
+            // High contrast filter
+            if (settings.highContrast) ctx.filter = 'contrast(250%) saturate(150%)';
+
+            // Draw based on state
+            if (state === 'title') drawTitle();
+            else if (state === 'howto') drawHowTo();
+            else if (state === 'settings') drawSettings();
+            else if (state === 'levelselect') drawLevelSelect();
+            else if (state === 'game') drawGame();
+            else if (state === 'end') drawEnd();
+            else if (state === 'about') drawAbout();
+
+            if (paused && state === 'game') drawPauseOverlay();
+
+            ctx.restore();
+            ctx.filter = 'none';
+        }
+
+        function drawField() {
+            // Grass gradient
+            const grad = ctx.createLinearGradient(0, 0, 0, logicalH);
+            grad.addColorStop(0, '#228B22');
+            grad.addColorStop(1, '#006400');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, logicalW, logicalH);
+
+            // Lines (white)
+            ctx.strokeStyle = settings.highContrast ? '#000' : '#fff';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.setLineDash([]);
+
+            // Center line
+            ctx.beginPath();
+            ctx.moveTo(logicalW / 2, 0);
+            ctx.lineTo(logicalW / 2, logicalH);
+            ctx.stroke();
+
+            // Center circle
+            ctx.beginPath();
+            ctx.arc(logicalW / 2, logicalH / 2, 80, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Penalty areas
+            ctx.strokeRect(logicalW * 0.15, logicalH * 0.3, 120, logicalH * 0.4);
+            ctx.strokeRect(logicalW * 0.85 - 120, logicalH * 0.3, 120, logicalH * 0.4);
+
+            // Goal
+            ctx.fillStyle = settings.highContrast ? '#fff' : '#ccc';
+            ctx.fillRect(goalRect.x - 15, goalRect.y - 20, goalRect.w + 30, goalRect.h + 40);
+        }
+
+        function drawGame() {
+            drawField();
+
+            // Powerups
+            ctx.fillStyle = '#ffff00';
+            for (let pup of powerups) {
+                if (!pup.collected) {
+                    ctx.beginPath();
+                    ctx.arc(pup.x, pup.y, pup.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ff0';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            }
+
+            // Defenders
+            ctx.fillStyle = settings.highContrast ? '#fff' : '#ff0000';
+            for (let def of defenders) {
+                ctx.beginPath();
+                ctx.arc(def.x, def.y, def.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Goalie
+            if (goalie) {
+                ctx.fillStyle = settings.highContrast ? '#000' : '#ffaa00';
+                ctx.beginPath();
+                ctx.arc(goalie.x, goalie.y, goalie.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Ball trail
+            ctx.strokeStyle = settings.highContrast ? '#000' : '#fff';
+            ctx.lineWidth = 3;
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath();
+            for (let i = 0; i < ball.trail.length; i++) {
+                const alpha = i / ball.trail.length;
+                ctx.globalAlpha = alpha * 0.4;
+                if (i === 0) ctx.moveTo(ball.trail[i].x, ball.trail[i].y);
+                else ctx.lineTo(ball.trail[i].x, ball.trail[i].y);
+            }
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // Ball
+            ctx.fillStyle = settings.highContrast ? '#000' : '#111';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.size, 0, Math.PI * 2);
+            ctx.fill();
+            // Pattern
+            ctx.fillStyle = settings.highContrast ? '#fff' : '#eee';
+            for (let ang = 0; ang < Math.PI * 2; ang += Math.PI / 3) {
+                ctx.beginPath();
+                ctx.arc(ball.x + Math.cos(ang) * 6, ball.y + Math.sin(ang) * 6, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Player
+            const playerGlow = dashing ? 'rgba(0,255,255,0.4)' : 'rgba(0,150,255,0.3)';
+            ctx.shadowColor = playerGlow;
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = settings.highContrast ? '#fff' : '#0066ff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Ball connection if has ball
+            if (dist(player.x, player.y, ball.x, ball.y) < 35) {
+                ctx.strokeStyle = settings.highContrast ? '#00f' : '#00aaff';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y);
+                ctx.lineTo(ball.x, ball.y);
+                ctx.stroke();
+            }
+
+            // Particles
+            for (let p of particles) {
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * p.alpha, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            // HUD
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${goals}/${requiredGoals === Infinity ? '∞' : requiredGoals}`, 30, 45);
+            ctx.font = '24px Arial';
+            ctx.fillText(`Score: ${score}`, 30, 80);
+            ctx.fillText(`Combo: x${combo}`, 30, 110);
+            ctx.fillText(`Health: ${health}`, 30, 150);
+
+            // Energy bar
+            ctx.fillStyle = '#333';
+            ctx.fillRect(logicalW - 250, 30, 200, 25);
+            ctx.fillStyle = energy > 30 ? '#00ff88' : '#ff4444';
+            ctx.fillRect(logicalW - 250, 30, (energy / 100) * 200, 25);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(logicalW - 250, 30, 200, 25);
+
+            // Mobile controls
+            if (isMobile) {
+                // Joystick bg
+                ctx.globalAlpha = 0.4;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(100, logicalH - 120, 70, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(touchJoy.cx || 100, touchJoy.cy || logicalH - 120, 35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // Buttons
+                drawButton('Dash', logicalW - 220, logicalH - 120, 120, 45, null, touchDash);
+                drawButton('Shoot', logicalW - 220, logicalH - 180, 120, 45, null, touchShoot);
+            }
+
+            ctx.textAlign = 'right';
+            ctx.fillText(`Lv ${isEndless ? '∞' : currentLevel}`, logicalW - 30, 45);
+            ctx.textAlign = 'left';
+        }
+
+        function drawTitle() {
+            ctx.fillStyle = '#00ffff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Neon Soccer Striker', logicalW / 2, logicalH / 2 - 120);
+            ctx.font = '32px Arial';
+            ctx.fillText('Daily Seed: ' + dailySeed, logicalW / 2, logicalH / 2 - 60);
+            ctx.fillStyle = '#fff';
+            drawButton('PLAY', logicalW / 2 - 100, logicalH / 2 - 20, 200, 50, () => startLevel(1));
+            drawButton('CONTINUE', logicalW / 2 - 100, logicalH / 2 + 50, 200, 50, () => state = 'levelselect');
+            drawButton('HOW TO PLAY', logicalW / 2 - 100, logicalH / 2 + 120, 200, 50, () => state = 'howto');
+            drawButton('SETTINGS', logicalW / 2 - 100, logicalH / 2 + 190, 200, 50, () => state = 'settings');
+            drawButton('ABOUT', logicalW / 2 - 100, logicalH / 2 + 260, 200, 50, () => state = 'about');
+            ctx.textAlign = 'left';
+        }
+
+        function drawHowTo() {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('HOW TO PLAY', logicalW / 2, 80);
+            ctx.textAlign = 'left';
+            ctx.font = '24px Arial';
+            ctx.fillText('Dribble the ball past defenders and score in the goal!', 50, 150);
+            ctx.fillText('- WASD/Arrows or joystick: Move', 50, 200);
+            ctx.fillText('- Space/Dash btn (hold): Dash (uses energy)', 50, 230);
+            ctx.fillText('- E/Shoot btn: Kick ball toward goal', 50, 260);
+            ctx.fillText('- Collect yellow powerups for energy & points', 50, 290);
+            ctx.fillText('- Score required goals before 3 tackles', 50, 330);
+            ctx.fillText('- Endless mode after level 10', 50, 360);
+            ctx.fillText('Mobile: Joystick left, buttons right', 50, 390);
+            drawButton('BACK', logicalW / 2 - 100, logicalH - 80, 200, 50, () => state = 'title');
+            ctx.textAlign = 'left';
+        }
+
+        function drawSettings() {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('SETTINGS', logicalW / 2, 80);
+            ctx.textAlign = 'left';
+            ctx.font = '24px Arial';
+            let y = 150;
+            drawToggle('Mute All', settings.mute, 50, y); y += 60;
+            drawSlider('Music Vol', settings.musicVol, 50, y, v => settings.musicVol = v); y += 60;
+            drawSlider('SFX Vol', settings.sfxVol, 50, y, v => settings.sfxVol = v); y += 60;
+            drawToggle('Reduced Motion', settings.reducedMotion, 50, y); y += 60;
+            drawToggle('High Contrast', settings.highContrast, 50, y);
+            drawButton('BACK', logicalW / 2 - 100, logicalH - 80, 200, 50, () => state = 'title');
+            ctx.textAlign = 'left';
+        }
+
+        function drawLevelSelect() {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('LEVEL SELECT', logicalW / 2, 80);
+            ctx.textAlign = 'left';
+            ctx.font = '28px Arial';
+            const btnW = 150;
+            const btnH = 55;
+            const cols = 4;
+            for (let i = 1; i <= 10; i++) {
+                const col = (i - 1) % cols;
+                const row = Math.floor((i - 1) / cols);
+                const bx = 80 + col * (btnW + 30);
+                const by = 160 + row * (btnH + 20);
+                if (i <= progress.unlocked) {
+                    drawButton(`Lv ${i}`, bx, by, btnW, btnH, () => startLevel(i));
+                    ctx.fillText(`Best: ${progress.bestScores[i-1]}`, bx, by + btnH + 25);
+                } else {
+                    ctx.fillStyle = '#666';
+                    ctx.fillRect(bx, by, btnW, btnH);
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText(`Lv ${i} Locked`, bx + 10, by + 35);
+                }
+            }
+            if (progress.unlocked >= 11) {
+                drawButton('ENDLESS', logicalW / 2 - 100, 520, 200, 55, () => startLevel(11, true));
+                ctx.fillText(`Best: ${progress.bestScores[10]} goals`, logicalW / 2 - 90, 590);
+            }
+            drawButton('BACK', logicalW / 2 - 100, logicalH - 80, 200, 50, () => state = 'title');
+            ctx.textAlign = 'left';
+        }
+
+        function drawEnd() {
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(0, 0, logicalW, logicalH);
+            ctx.fillStyle = health > 0 ? '#00ff88' : '#ff4444';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(health > 0 ? 'GOAL!' : 'TACKLED OUT!', logicalW / 2, logicalH / 2 - 80);
+            ctx.fillStyle = '#fff';
+            ctx.font = '32px Arial';
+            ctx.fillText(`Goals: ${goals}`, logicalW / 2, logicalH / 2 - 20);
+            ctx.fillText(`Score: ${score}`, logicalW / 2, logicalH / 2 + 20);
+            ctx.fillText(`Best: ${progress.bestScores[isEndless ? 10 : currentLevel - 1]}`, logicalW / 2, logicalH / 2 + 60);
+            ctx.textAlign = 'left';
+            const by = logicalH / 2 + 120;
+            if (health > 0 && !isEndless) {
+                drawButton('NEXT LEVEL', logicalW / 2 - 150, by, 300, 55, () => startLevel(currentLevel + 1));
+            }
+            drawButton('RESTART', logicalW / 2 - 150, by + 70, 300, 55, () => startLevel(currentLevel, isEndless));
+            drawButton('MENU', logicalW / 2 - 150, by + 140, 300, 55, () => state = 'title');
+            ctx.textAlign = 'left';
+        }
+
+        function drawPauseOverlay() {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, logicalW, logicalH);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('PAUSED', logicalW / 2, logicalH / 2 - 50);
+            ctx.textAlign = 'left';
+            drawButton('RESUME', logicalW / 2 - 100, logicalH / 2 + 20, 200, 50, () => paused = false);
+            drawButton('RESTART', logicalW / 2 - 100, logicalH / 2 + 90, 200, 50, () => startLevel(currentLevel, isEndless));
+            drawButton('MENU', logicalW / 2 - 100, logicalH / 2 + 160, 200, 50, () => state = 'title');
+        }
+
+        function drawAbout() {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('ABOUT', logicalW / 2, 80);
+            ctx.textAlign = 'left';
+            ctx.font = '24px Arial';
+            ctx.fillText('Neon Soccer Striker', 50, 150);
+            ctx.fillText(`Seed: ${dailySeed} - Cosmic soccer arena theme`, 50, 190);
+            ctx.fillText('Dash past defenders, kick to score!', 50, 230);
+            ctx.fillText('Tip: Dash to dodge, save energy for key moments.', 50, 270);
+            ctx.fillText('Master combos for high scores!', 50, 310);
+            drawButton('BACK', logicalW / 2 - 100, logicalH - 80, 200, 50, () => state = 'title');
+        }
+
+        // UI Helpers
+        function drawButton(text, x, y, w, h, cb, pressed = false) {
+            ctx.fillStyle = pressed ? '#00cc00' : '#00ff00';
+            ctx.fillRect(x, y, w, h);
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, x + w / 2, y + h / 2);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+        }
+
+        function drawToggle(text, value, x, y) {
+            ctx.fillText(text + ':', x, y + 25);
+            const tx = x + 200;
+            ctx.fillStyle = value ? '#00ff00' : '#ff0000';
+            ctx.fillRect(tx, y, 100, 40);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(value ? 'ON' : 'OFF', tx + 35, y + 28);
+        }
+
+        function drawSlider(text, value, x, y, cb) {
+            ctx.fillText(text + ':', x, y + 25);
+            const sx = x + 200;
+            ctx.fillStyle = '#555';
+            ctx.fillRect(sx, y + 10, 220, 20);
+            ctx.fillStyle = '#00ff88';
+            ctx.fillRect(sx, y + 10, value * 220, 20);
+            ctx.fillStyle = '#fff';
+            ctx.fillText((value * 100).toFixed(0) + '%', sx + 230, y + 25);
+        }
+
+        // Click handler (generic for all screens)
+        function handleUIClick(mx, my) {
+            // Implement button checks for each state
+            const btnCheck = (bx, by, bw, bh, cb) => {
+                if (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh) {
+                    cb();
+                    return true;
+                }
+                return false;
+            };
+
+            if (state === 'title') {
+                if (btnCheck(logicalW / 2 - 100, logicalH / 2 - 20, 200, 50, () => startLevel(1))) return;
+                if (btnCheck(logicalW / 2 - 100, logicalH / 2 + 50, 200, 50, () => state = 'levelselect')) return;
+                if (btnCheck(logicalW / 2 - 100, logicalH / 2 + 120, 200, 50, () => state = 'howto')) return;
+                if (btnCheck(logicalW / 2 - 100, logicalH / 2 + 190, 200, 50, () => state = 'settings')) return;
+                if (btnCheck(logicalW / 2 - 100, logicalH / 2 + 260, 200, 50, () => state = 'about')) return;
+            } else if (state === 'howto' || state === 'about' || state === 'settings') {
+                if (btnCheck(logicalW / 2 - 100, logicalH - 80, 200, 50, () => state = 'title')) return;
+            } else if (state === 'levelselect') {
+                const btnW = 150, btnH = 55, cols = 4;
+                for (let i = 1; i <= 10; i++) {
+                    const col = (i - 1) % cols;
+                    const row = Math.floor((i - 1) / cols);
+                    const bx = 80 + col * (btnW + 30);
+                    const by = 160 + row * (btnH + 20);
+                    if (i <= progress.unlocked && btnCheck(bx, by, btnW, btnH, () => startLevel(i))) return;
+                }
+                if (progress.unlocked >= 11 && btnCheck(logicalW / 2 - 100, 520, 200, 55, () => startLevel(11, true))) return;
+                if (btnCheck(logicalW / 2 - 100, logicalH - 80, 200, 50, () => state = 'title')) return;
+            } else if (state === 'end') {
+                const by = logicalH / 2 + 120;
+                if (health > 0 && !isEndless && btnCheck(logicalW / 2 - 150, by, 300, 55, () => startLevel(currentLevel + 1))) return;
+                if (btnCheck(logicalW / 2 - 150, by + 70, 300, 55, () => startLevel(currentLevel, isEndless))) return;
+                if (btnCheck(logicalW / 2 - 150, by + 140, 300, 55, () => state = 'title')) return;
+            } else if (paused) {
+                if (btnCheck(logicalW / 2 - 100, logicalH / 2 + 20, 200, 50, () => paused = false)) return;
+                if (btnCheck(logicalW / 2 - 100, logicalH / 2 + 90, 200, 50, () => startLevel(currentLevel, isEndless))) return;
+                if (btnCheck(logicalW / 2 - 100, logicalH / 2 + 160, 200, 50, () => state = 'title')) return;
+            }
+
+            // Settings toggles/sliders (approximate positions)
+            if (state === 'settings') {
+                if (btnCheck(250, 150, 100, 40, () => { settings.mute = !settings.mute; if (settings.mute) stopMusic(); saveSettings(); })) return;
+                if (btnCheck(250, 270, 100, 40, () => { settings.reducedMotion = !settings.reducedMotion; saveSettings(); })) return;
+                if (btnCheck(250, 330, 100, 40, () => { settings.highContrast = !settings.highContrast; saveSettings(); })) return;
+                // Sliders click set value
+                if (my > 190 && my < 250) settings.musicVol = Math.max(0, Math.min(1, (mx - 250) / 220)); saveSettings();
+                if (my > 250 && my < 310) settings.sfxVol = Math.max(0, Math.min(1, (mx - 250) / 220)); saveSettings();
+            }
+        }
+    </script>
+</body>
+</html>
