@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neon Spore: Grapple Protocol</title>
+<style>
+    :root {
+        --bg-color: #050505;
+        --text-color: #00ffcc;
+        --accent-color: #ff0055;
+        --panel-bg: rgba(10, 20, 30, 0.95);
+        --font-main: 'Courier New', Courier, monospace;
+    }
+    body, html {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        font-family: var(--font-main);
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: none;
+    }
+    #game-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    canvas {
+        box-shadow: 0 0 20px rgba(0, 255, 204, 0.1);
+        cursor: crosshair;
+    }
+    /* UI Overlay */
+    .ui-layer {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+        text-align: center;
+        text-shadow: 0 0 5px var(--text-color);
+    }
+    .hud-layer {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+    .hud-item {
+        position: absolute;
+        font-size: 1.2rem;
+        font-weight: bold;
+        padding: 10px;
+    }
+    #score-hud { top: 10px; left: 10px; }
+    #level-hud { top: 10px; right: 10px; }
+    #health-hud { bottom: 10px; left: 10px; color: var(--accent-color); }
+    #combo-hud { top: 40px; left: 10px; font-size: 1rem; opacity: 0; transition: opacity 0.2s; color: #ffff00; }
+    
+    /* Interactive Panels */
+    .panel {
+        background: var(--panel-bg);
+        border: 2px solid var(--text-color);
+        border-radius: 8px;
+        padding: 2rem;
+        max-width: 500px;
+        width: 90%;
+        pointer-events: auto;
+        box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
+        display: none;
+        animation: fadeIn 0.3s ease-out;
+    }
+    .panel.active { display: block; }
+    
+    h1 { margin-top: 0; font-size: 2.5rem; text-transform: uppercase; letter-spacing: 4px; color: #fff; }
+    h2 { border-bottom: 1px solid var(--text-color); padding-bottom: 10px; }
+    
+    button {
+        background: transparent;
+        border: 1px solid var(--text-color);
+        color: var(--text-color);
+        padding: 12px 24px;
+        font-family: var(--font-main);
+        font-size: 1.1rem;
+        font-weight: bold;
+        margin: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-transform: uppercase;
+    }
+    button:hover {
+        background: var(--text-color);
+        color: var(--bg-color);
+        box-shadow: 0 0 15px var(--text-color);
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .slider-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 10px 0;
+    }
+    input[type=range] { width: 50%; }
+    
+    .hidden { display: none !important; }
+    
+    /* Tutorial Styling */
+    .key {
+        display: inline-block;
+        border: 1px solid #fff;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #333;
+        font-size: 0.9em;
+    }
+    
+    /* Level Select Grid */
+    .level-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .level-btn {
+        padding: 10px 0;
+        margin: 0;
+        font-size: 1rem;
+    }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* Mobile Controls */
+    #mobile-controls {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        pointer-events: auto;
+        display: none; /* Shown via JS detection */
+    }
+    .touch-btn {
+        width: 80px; height: 80px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.3);
+        background: rgba(255,255,255,0.1);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-weight: bold;
+        user-select: none;
+    }
+    .touch-btn:active { background: rgba(255,255,255,0.3); }
+
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="game-ui" class="hud-layer hidden">
+        <div id="score-hud">SCORE: 0</div>
+        <div id="combo-hud">COMBO x1</div>
+        <div id="level-hud">LEVEL 1</div>
+        <div id="health-hud">ENERGY: 100%</div>
+        <div style="position:absolute; bottom:10px; right:10px; font-size:0.8rem; opacity:0.7">ESC to Pause</div>
+    </div>
+
+    <div id="ui-overlay" class="ui-layer">
+        
+        <div id="panel-title" class="panel active">
+            <h1>Neon Spore</h1>
+            <p style="font-size:0.9rem; opacity:0.8; margin-bottom:20px;">Daily Seed: <span id="seed-display"></span></p>
+            <button onclick="Game.showLevelSelect()">Play</button>
+            <button onclick="Game.showHowTo()">How to Play</button>
+            <button onclick="Game.showSettings()">Settings</button>
+            <button onclick="window.location.href='../index.html'">Main Menu</button>
+            <p style="font-size:0.8rem; margin-top:20px;">Designed for 2026-02-13</p>
+        </div>
+
+        <div id="panel-levels" class="panel">
+            <h2>Select Sector</h2>
+            <div class="level-grid" id="level-grid"></div>
+            <button onclick="Game.showTitle()">Back</button>
+        </div>
+
+        <div id="panel-howto" class="panel">
+            <h2>Mission Briefing</h2>
+            <p>You are a bio-digital spore. <br>Cleanse the system by collecting <strong>ALL YELLOW POLLEN</strong>.</p>
+            <ul style="text-align:left; font-size:0.9rem; line-height:1.6;">
+                <li><strong>Aim & Click/Tap</strong> to launch a Grapple Tether.</li>
+                <li>Hold to swing, Release to let go.</li>
+                <li><strong>Momentum is key.</strong> Don't touch the Red Virus!</li>
+                <li><strong>Space</strong> or <strong>Double Tap</strong> to Pulse (Push enemies away).</li>
+                <li>Avoid running out of Energy (Movement recharges slightly).</li>
+            </ul>
+            <button onclick="Game.showTitle()">Understood</button>
+        </div>
+
+        <div id="panel-settings" class="panel">
+            <h2>System Settings</h2>
+            <div class="slider-row">
+                <span>Master Volume</span>
+                <input type="range" min="0" max="100" value="50" oninput="AudioSys.setVol(this.value)">
+            </div>
+            <div class="slider-row">
+                <span>Music</span>
+                <button id="btn-music" style="padding:5px 10px; font-size:0.8rem;" onclick="AudioSys.toggleMusic()">ON</button>
+            </div>
+            <div class="slider-row">
+                <span>High Contrast</span>
+                <button id="btn-contrast" style="padding:5px 10px; font-size:0.8rem;" onclick="Game.toggleContrast()">OFF</button>
+            </div>
+            <div class="slider-row">
+                <button style="width:100%; border-color: #f00; color:#f00;" onclick="Game.clearData()">Reset Save Data</button>
+            </div>
+            <button onclick="Game.showTitle()">Back</button>
+        </div>
+
+        <div id="panel-pause" class="panel">
+            <h2>Paused</h2>
+            <button onclick="Game.resume()">Resume</button>
+            <button onclick="Game.restartLevel()">Restart Level</button>
+            <button onclick="Game.quitToTitle()">Quit</button>
+        </div>
+
+        <div id="panel-end" class="panel">
+            <h2 id="end-title">Sector Cleared!</h2>
+            <p id="end-stats">Score: 0</p>
+            <button id="btn-next" onclick="Game.nextLevel()">Next Sector</button>
+            <button onclick="Game.restartLevel()">Retry</button>
+            <button onclick="Game.quitToTitle()">Menu</button>
+        </div>
+    </div>
+    
+    <div id="mobile-controls">
+        <div class="touch-btn" id="btn-pulse" ontouchstart="Game.inputPulse(event)">PULSE</div>
+    </div>
+</div>
+
+<script>
+/**
+ * NEON SPORE: GRAPPLE PROTOCOL
+ * A single-file HTML game generated by Gemini 3 Pro.
+ * No external libraries. Pure JS/Canvas/WebAudio.
+ */
+
+// --- UTILS & MATH ---
+const PI2 = Math.PI * 2;
+const DEG2RAD = Math.PI / 180;
+
+const Vec2 = {
+    add: (v1, v2) => ({ x: v1.x + v2.x, y: v1.y + v2.y }),
+    sub: (v1, v2) => ({ x: v1.x - v2.x, y: v1.y - v2.y }),
+    mul: (v, s) => ({ x: v.x * s, y: v.y * s }),
+    mag: (v) => Math.sqrt(v.x * v.x + v.y * v.y),
+    norm: (v) => { const m = Math.sqrt(v.x*v.x + v.y*v.y); return m === 0 ? {x:0,y:0} : {x:v.x/m, y:v.y/m}; },
+    dist: (v1, v2) => Math.sqrt(Math.pow(v2.x - v1.x, 2) + Math.pow(v2.y - v1.y, 2)),
+    dot: (v1, v2) => v1.x * v2.x + v1.y * v2.y
+};
+
+// PRNG for Deterministic Generation
+class Rand {
+    constructor(seed) { this.state = seed; }
+    next() {
+        this.state |= 0; this.state = this.state + 0x6D2B79F5 | 0;
+        let t = Math.imul(this.state ^ (this.state >>> 15), 1 | this.state);
+        t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    range(min, max) { return min + this.next() * (max - min); }
+    int(min, max) { return Math.floor(this.range(min, max + 1)); }
+}
+
+// --- AUDIO SYSTEM (WebAudio) ---
+const AudioSys = {
+    ctx: null,
+    masterVol: 0.5,
+    musicOn: true,
+    nodes: [],
+    musicTimer: null,
+    
+    init: function() {
+        if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            this.startMusic();
+        }
+    },
+    
+    setVol: function(val) { this.masterVol = val / 100; },
+    toggleMusic: function() { 
+        this.musicOn = !this.musicOn; 
+        document.getElementById('btn-music').innerText = this.musicOn ? "ON" : "OFF";
+        if(!this.musicOn && this.musicTimer) clearTimeout(this.musicTimer);
+        if(this.musicOn) this.playMusicNote();
+    },
+
+    playTone: function(freq, type, duration, vol = 0.5, slide = 0) {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        if (slide !== 0) {
+            osc.frequency.exponentialRampToValueAtTime(freq + slide, this.ctx.currentTime + duration);
+        }
+        
+        gain.gain.setValueAtTime(vol * this.masterVol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    },
+
+    playSFX: function(name) {
+        if (!this.ctx) return;
+        switch(name) {
+            case 'grapple': this.playTone(600, 'sine', 0.1, 0.3, 400); break;
+            case 'jump': this.playTone(300, 'square', 0.1, 0.2, -100); break;
+            case 'collect': 
+                this.playTone(1200, 'sine', 0.1, 0.3); 
+                setTimeout(() => this.playTone(1800, 'sine', 0.1, 0.3), 50);
+                break;
+            case 'hit': this.playTone(100, 'sawtooth', 0.3, 0.5, -50); break;
+            case 'pulse': this.playTone(200, 'triangle', 0.4, 0.4, 800); break;
+            case 'win': 
+                [440, 554, 659, 880].forEach((f, i) => setTimeout(() => this.playTone(f, 'square', 0.2, 0.2), i*100));
+                break;
+        }
+    },
+
+    // Procedural Ambient Music
+    playMusicNote: function() {
+        if (!this.musicOn) return;
+        const scale = [261.63, 311.13, 392.00, 466.16, 523.25]; // Cm pentatonic
+        const note = scale[Math.floor(Math.random() * scale.length)];
+        // Ambient pad
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = note / 2; // Bassier
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.05 * this.masterVol, this.ctx.currentTime + 1);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 4);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 4);
+        
+        this.musicTimer = setTimeout(() => this.playMusicNote(), 2000 + Math.random() * 2000);
+    },
+    
+    startMusic: function() {
+        if(this.musicOn) this.playMusicNote();
+    }
+};
+
+// --- GAME CONFIG & STATE ---
+const CONSTANTS = {
+    GRAVITY: 0.2,
+    FRICTION: 0.98,
+    SPEED: 0.5,
+    MAX_SPEED: 12,
+    TETHER_LEN: 300,
+    TETHER_STIFFNESS: 0.05,
+    ENERGY_DECAY: 0.05,
+    ENERGY_GAIN: 0.2
+};
+
+const Game = {
+    canvas: document.getElementById('gameCanvas'),
+    ctx: document.getElementById('gameCanvas').getContext('2d'),
+    width: 0, height: 0,
+    state: 'title', // title, playing, paused, gameover
+    lastTime: 0,
+    seed: 20260213, // Daily seed
+    rng: null,
+    level: 1,
+    maxLevel: 10,
+    unlockedLevels: 1,
+    score: 0,
+    highScore: 0,
+    settings: { highContrast: false },
+    
+    // Entities
+    player: null,
+    camera: { x: 0, y: 0, shake: 0 },
+    anchors: [],
+    collectables: [],
+    enemies: [],
+    particles: [],
+    mouse: { x: 0, y: 0, down: false },
+    keys: {},
+    
+    // Mechanics
+    combo: 1,
+    comboTimer: 0,
+    
+    init: function() {
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.setupInputs();
+        this.loadProgress();
+        
+        // UI Setup
+        document.getElementById('seed-display').innerText = new Date().toISOString().split('T')[0];
+        this.renderLevelGrid();
+        
+        requestAnimationFrame((t) => this.loop(t));
+    },
+    
+    resize: function() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+    },
+    
+    saveProgress: function() {
+        const data = { unlocked: this.unlockedLevels, score: this.highScore, settings: this.settings };
+        localStorage.setItem('sporeSwingSave', JSON.stringify(data));
+    },
+    
+    loadProgress: function() {
+        const data = localStorage.getItem('sporeSwingSave');
+        if (data) {
+            const parsed = JSON.parse(data);
+            this.unlockedLevels = parsed.unlocked || 1;
+            this.highScore = parsed.score || 0;
+            this.settings = parsed.settings || { highContrast: false };
+            this.updateSettingsUI();
+        }
+    },
+    
+    clearData: function() {
+        localStorage.removeItem('sporeSwingSave');
+        this.unlockedLevels = 1;
+        this.highScore = 0;
+        this.renderLevelGrid();
+        alert("Save data cleared.");
+    },
+
+    updateSettingsUI: function() {
+        document.getElementById('btn-contrast').innerText = this.settings.highContrast ? "ON" : "OFF";
+    },
+
+    toggleContrast: function() {
+        this.settings.highContrast = !this.settings.highContrast;
+        this.updateSettingsUI();
+        this.saveProgress();
+    },
+
+    // --- INPUTS ---
+    setupInputs: function() {
+        // Mouse/Touch
+        const getPos = (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        };
+
+        this.canvas.addEventListener('mousedown', (e) => {
+            AudioSys.init();
+            this.mouse.down = true;
+            this.mouse.x = getPos(e).x;
+            this.mouse.y = getPos(e).y;
+            this.handleInputDown();
+        });
+        this.canvas.addEventListener('mousemove', (e) => {
+            const p = getPos(e); this.mouse.x = p.x; this.mouse.y = p.y;
+        });
+        window.addEventListener('mouseup', () => { this.mouse.down = false; if(this.player) this.player.tether = null; });
+        
+        // Touch
+        this.canvas.addEventListener('touchstart', (e) => {
+            AudioSys.init();
+            e.preventDefault(); // Prevent scroll
+            this.mouse.down = true;
+            const p = getPos(e); this.mouse.x = p.x; this.mouse.y = p.y;
+            this.handleInputDown();
+        }, {passive: false});
+        this.canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const p = getPos(e); this.mouse.x = p.x; this.mouse.y = p.y;
+        }, {passive: false});
+        window.addEventListener('touchend', () => { this.mouse.down = false; if(this.player) this.player.tether = null; });
+
+        // Keyboard
+        window.addEventListener('keydown', (e) => {
+            this.keys[e.code] = true;
+            if (e.code === 'Escape') this.togglePause();
+            if (e.code === 'Space') this.triggerPulse();
+        });
+        window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+
+        // Mobile check
+        if ('ontouchstart' in window) {
+            document.getElementById('mobile-controls').style.display = 'block';
+        }
+    },
+    
+    handleInputDown: function() {
+        if (this.state !== 'playing') return;
+        // Logic to shoot grapple handled in update
+    },
+    
+    inputPulse: function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.triggerPulse();
+    },
+
+    triggerPulse: function() {
+        if (this.state !== 'playing' || !this.player) return;
+        if (this.player.energy > 10) {
+            this.player.energy -= 10;
+            AudioSys.playSFX('pulse');
+            // Effect
+            for (let i = 0; i < 20; i++) {
+                this.spawnParticle(this.player.pos.x, this.player.pos.y, Math.cos(i)*5, Math.sin(i)*5, '#0ff', 20);
+            }
+            // Push enemies
+            this.enemies.forEach(e => {
+                const d = Vec2.dist(this.player.pos, e.pos);
+                if (d < 200) {
+                    const dir = Vec2.norm(Vec2.sub(e.pos, this.player.pos));
+                    e.vel = Vec2.add(e.vel, Vec2.mul(dir, 10));
+                }
+            });
+        }
+    },
+
+    // --- GAME LOOP ---
+    loop: function(timestamp) {
+        const dt = (timestamp - this.lastTime) / 16.67; // Normalize to 60fps
+        this.lastTime = timestamp;
+
+        if (this.state === 'playing') {
+            this.update(dt);
+            this.draw();
+        } else if (this.state === 'paused') {
+            this.draw(); // Keep last frame
+            this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            this.ctx.fillRect(0,0,this.width, this.height);
+        }
+        
+        requestAnimationFrame((t) => this.loop(t));
+    },
+
+    // --- LEVEL GENERATION ---
+    startLevel: function(lvl) {
+        this.level = lvl;
+        this.state = 'playing';
+        this.score = 0; // Reset score per run or per level? Let's do per level score summing
+        this.combo = 1;
+        
+        // Hide UI
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('ui-overlay').classList.add('hidden');
+        document.getElementById('game-ui').classList.remove('hidden');
+
+        // Setup RNG
+        this.rng = new Rand(this.seed + lvl * 999);
+        
+        // Init Entities
+        const startX = this.width/2;
+        const startY = this.height/2;
+        this.player = {
+            pos: {x: startX, y: startY},
+            vel: {x: 0, y: 0},
+            radius: 12,
+            energy: 100,
+            tether: null,
+            invuln: 0
+        };
+        
+        this.camera = { x: 0, y: 0, shake: 0 };
+        this.anchors = [];
+        this.collectables = [];
+        this.enemies = [];
+        this.particles = [];
+
+        // Generate Map
+        const boundary = 800 + (lvl * 200); // World size grows
+        this.worldBounds = { w: boundary, h: boundary };
+        
+        // 1. Generate Anchors (Spores)
+        const anchorCount = 10 + lvl * 3;
+        for(let i=0; i<anchorCount; i++) {
+            this.anchors.push({
+                pos: { x: this.rng.range(-boundary/2, boundary/2), y: this.rng.range(-boundary/2, boundary/2) },
+                radius: this.rng.range(15, 30)
+            });
+        }
+        // Ensure one anchor is near start
+        this.anchors.push({pos: {x: startX, y: startY - 100}, radius: 20});
+
+        // 2. Generate Collectables (Pollen)
+        const pollenCount = 5 + lvl;
+        for(let i=0; i<pollenCount; i++) {
+            let valid = false;
+            let pos;
+            while(!valid) {
+                pos = { x: this.rng.range(-boundary/2, boundary/2), y: this.rng.range(-boundary/2, boundary/2) };
+                // Keep away from player start
+                if(Vec2.dist(pos, this.player.pos) > 200) valid = true;
+            }
+            this.collectables.push({ pos: pos, collected: false, radius: 8, float: this.rng.range(0, Math.PI) });
+        }
+
+        // 3. Generate Enemies (Virus) - Start from lvl 3
+        if (lvl >= 3) {
+            const enemyCount = Math.floor(lvl / 1.5);
+            for(let i=0; i<enemyCount; i++) {
+                let pos;
+                let valid = false;
+                while(!valid) {
+                    pos = { x: this.rng.range(-boundary/2, boundary/2), y: this.rng.range(-boundary/2, boundary/2) };
+                    if(Vec2.dist(pos, this.player.pos) > 400) valid = true;
+                }
+                this.enemies.push({
+                    pos: pos,
+                    vel: {x:0, y:0},
+                    type: (lvl > 6 && i % 3 === 0) ? 'charger' : 'seeker',
+                    radius: 15
+                });
+            }
+        }
+        
+        // Level Objective
+        this.totalCollectables = this.collectables.length;
+    },
+
+    // --- LOGIC UPDATE ---
+    update: function(dt) {
+        const p = this.player;
+        
+        // Input Physics
+        if (this.keys['KeyA'] || this.keys['ArrowLeft']) p.vel.x -= 0.5 * dt;
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) p.vel.x += 0.5 * dt;
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) p.vel.y -= 0.5 * dt;
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) p.vel.y += 0.5 * dt;
+
+        // Grapple Logic
+        const worldMouse = { x: this.mouse.x + this.camera.x - this.width/2, y: this.mouse.y + this.camera.y - this.height/2 };
+        
+        if (this.mouse.down && !p.tether) {
+            // Find nearest anchor in range & direction
+            let best = null;
+            let minDist = 1000;
+            
+            this.anchors.forEach(a => {
+                const d = Vec2.dist(worldMouse, a.pos);
+                // "Magnet" feel: if clicking near anchor, grab it. Or if clicking far, raycast.
+                // Simple implementation: Click within radius + buffer
+                if (d < a.radius + 50) {
+                    if (d < minDist) { minDist = d; best = a; }
+                }
+            });
+
+            if (best && Vec2.dist(p.pos, best.pos) < CONSTANTS.TETHER_LEN + 100) {
+                p.tether = best;
+                AudioSys.playSFX('grapple');
+                // Initial pull
+                const dir = Vec2.norm(Vec2.sub(best.pos, p.pos));
+                p.vel = Vec2.add(p.vel, Vec2.mul(dir, 5));
+            }
+        }
+
+        // Physics Integration
+        if (p.tether) {
+            const vec = Vec2.sub(p.tether.pos, p.pos);
+            const dist = Vec2.mag(vec);
+            const dir = Vec2.norm(vec);
+            
+            // Spring force
+            if (dist > 50) {
+                const force = (dist - 50) * CONSTANTS.TETHER_STIFFNESS;
+                p.vel.x += dir.x * force * dt;
+                p.vel.y += dir.y * force * dt;
+            }
+            
+            // Swing momentum maintenance (add tangent force based on input for "pumping")
+            // Simplified: Just allow WASD to influence swing heavily
+        }
+
+        // Apply Velocity
+        p.pos.x += p.vel.x * dt;
+        p.pos.y += p.vel.y * dt;
+        p.vel.x *= CONSTANTS.FRICTION;
+        p.vel.y *= CONSTANTS.FRICTION; // Air drag/friction
+
+        // World Bounds (Soft bounce)
+        if (p.pos.x < -this.worldBounds.w) { p.pos.x = -this.worldBounds.w; p.vel.x *= -0.5; }
+        if (p.pos.x > this.worldBounds.w) { p.pos.x = this.worldBounds.w; p.vel.x *= -0.5; }
+        if (p.pos.y < -this.worldBounds.h) { p.pos.y = -this.worldBounds.h; p.vel.y *= -0.5; }
+        if (p.pos.y > this.worldBounds.h) { p.pos.y = this.worldBounds.h; p.vel.y *= -0.5; }
+
+        // Camera Follow (Smooth Lerp)
+        const targetCamX = p.pos.x;
+        const targetCamY = p.pos.y;
+        this.camera.x += (targetCamX - this.camera.x) * 0.1 * dt;
+        this.camera.y += (targetCamY - this.camera.y) * 0.1 * dt;
+        
+        // Shake decay
+        if (this.camera.shake > 0) {
+            this.camera.x += (Math.random()-0.5) * this.camera.shake;
+            this.camera.y += (Math.random()-0.5) * this.camera.shake;
+            this.camera.shake *= 0.9;
+            if(this.camera.shake < 0.5) this.camera.shake = 0;
+        }
+
+        // Energy Mechanics
+        const speed = Vec2.mag(p.vel);
+        if (speed > 2) p.energy = Math.min(100, p.energy + CONSTANTS.ENERGY_GAIN * dt);
+        else p.energy = Math.max(0, p.energy - CONSTANTS.ENERGY_DECAY * dt);
+        
+        if (p.energy <= 0 && this.state === 'playing') {
+             this.loseLevel("Energy Depleted");
+        }
+
+        // Collectables Logic
+        let collectedCount = 0;
+        this.collectables.forEach(c => {
+            if (!c.collected) {
+                c.float += 0.05 * dt;
+                if (Vec2.dist(p.pos, c.pos) < p.radius + c.radius + 10) {
+                    c.collected = true;
+                    this.score += 100 * this.combo;
+                    this.combo++;
+                    this.comboTimer = 120; // 2 seconds at 60fps
+                    p.energy = Math.min(100, p.energy + 20);
+                    AudioSys.playSFX('collect');
+                    this.spawnParticles(c.pos.x, c.pos.y, 10, '#ff0');
+                }
+            } else {
+                collectedCount++;
+            }
+        });
+        
+        // Check Win
+        if (collectedCount === this.totalCollectables) {
+            this.winLevel();
+        }
+
+        // Combo Decay
+        if (this.combo > 1) {
+            this.comboTimer -= dt;
+            if (this.comboTimer <= 0) {
+                this.combo = 1;
+                document.getElementById('combo-hud').style.opacity = 0;
+            } else {
+                document.getElementById('combo-hud').style.opacity = 1;
+                document.getElementById('combo-hud').innerText = "COMBO x" + this.combo;
+            }
+        }
+
+        // Enemy Logic
+        p.invuln -= dt;
+        this.enemies.forEach(e => {
+            // Steering behavior
+            const dist = Vec2.dist(e.pos, p.pos);
+            const dir = Vec2.norm(Vec2.sub(p.pos, e.pos));
+            let speed = (e.type === 'charger' && dist < 200) ? 3 : 1.5;
+            
+            // Repulsion from other enemies
+            this.enemies.forEach(other => {
+                if (e !== other) {
+                    const d = Vec2.dist(e.pos, other.pos);
+                    if (d < 40) {
+                        const rep = Vec2.norm(Vec2.sub(e.pos, other.pos));
+                        e.pos = Vec2.add(e.pos, Vec2.mul(rep, 1));
+                    }
+                }
+            });
+
+            e.vel.x = (e.vel.x * 0.95) + (dir.x * speed * 0.05);
+            e.vel.y = (e.vel.y * 0.95) + (dir.y * speed * 0.05);
+            
+            e.pos = Vec2.add(e.pos, Vec2.mul(e.vel, dt));
+
+            // Collision with player
+            if (Vec2.dist(e.pos, p.pos) < e.radius + p.radius && p.invuln <= 0) {
+                p.energy -= 30;
+                p.invuln = 60; // 1 sec
+                this.camera.shake = 20;
+                AudioSys.playSFX('hit');
+                // Knockback
+                const kb = Vec2.norm(Vec2.sub(p.pos, e.pos));
+                p.vel = Vec2.add(p.vel, Vec2.mul(kb, 15));
+                if (p.energy <= 0) this.loseLevel("Infected");
+            }
+        });
+
+        // Particles
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            let pt = this.particles[i];
+            pt.x += pt.vx * dt;
+            pt.y += pt.vy * dt;
+            pt.life -= dt;
+            if (pt.life <= 0) this.particles.splice(i, 1);
+        }
+
+        this.updateHUD();
+    },
+
+    spawnParticle: function(x, y, vx, vy, color, life) {
+        this.particles.push({x, y, vx, vy, color, life, maxLife: life});
+    },
+
+    spawnParticles: function(x, y, count, color) {
+        for(let i=0; i<count; i++) {
+            const ang = Math.random() * PI2;
+            const spd = Math.random() * 5;
+            this.spawnParticle(x, y, Math.cos(ang)*spd, Math.sin(ang)*spd, color, 30 + Math.random()*20);
+        }
+    },
+
+    updateHUD: function() {
+        document.getElementById('score-hud').innerText = `SCORE: ${this.score}`;
+        document.getElementById('health-hud').innerText = `ENERGY: ${Math.floor(this.player.energy)}%`;
+        const rem = this.collectables.filter(c => !c.collected).length;
+        document.getElementById('level-hud').innerText = `LEVEL ${this.level} | LEFT: ${rem}`;
+        
+        // Low energy warning color
+        document.getElementById('health-hud').style.color = this.player.energy < 20 ? '#ff0000' : '#00ffcc';
+    },
+
+    // --- RENDERING ---
+    draw: function() {
+        const ctx = this.ctx;
+        const w = this.width;
+        const h = this.height;
+        const cam = this.camera;
+        const cx = w/2 - cam.x;
+        const cy = h/2 - cam.y;
+
+        // Clear Background
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-color');
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // Draw World Bounds
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(-this.worldBounds.w, -this.worldBounds.h, this.worldBounds.w*2, this.worldBounds.h*2);
+        
+        // Draw Grid
+        ctx.strokeStyle = 'rgba(0, 255, 204, 0.05)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for(let x = -this.worldBounds.w; x <= this.worldBounds.w; x+=100) { ctx.moveTo(x, -this.worldBounds.h); ctx.lineTo(x, this.worldBounds.h); }
+        for(let y = -this.worldBounds.h; y <= this.worldBounds.h; y+=100) { ctx.moveTo(-this.worldBounds.w, y); ctx.lineTo(this.worldBounds.w, y); }
+        ctx.stroke();
+
+        // High Contrast Mode Handling
+        const glow = !this.settings.highContrast;
+
+        // Draw Tether
+        if (this.player.tether) {
+            ctx.beginPath();
+            ctx.moveTo(this.player.pos.x, this.player.pos.y);
+            ctx.lineTo(this.player.tether.pos.x, this.player.tether.pos.y);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            if(glow) { ctx.shadowBlur = 10; ctx.shadowColor = '#00ffcc'; }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw Anchors
+        ctx.fillStyle = '#0044aa';
+        this.anchors.forEach(a => {
+            ctx.beginPath();
+            ctx.arc(a.pos.x, a.pos.y, a.radius, 0, PI2);
+            ctx.fill();
+            // Inner core
+            ctx.fillStyle = '#88ccff';
+            ctx.beginPath();
+            ctx.arc(a.pos.x, a.pos.y, 5, 0, PI2);
+            ctx.fill();
+            ctx.fillStyle = '#0044aa'; // reset
+        });
+
+        // Draw Collectables
+        this.collectables.forEach(c => {
+            if (c.collected) return;
+            const yOff = Math.sin(c.float) * 5;
+            ctx.fillStyle = '#ffff00';
+            if(glow) { ctx.shadowBlur = 15; ctx.shadowColor = '#ffff00'; }
+            ctx.beginPath();
+            ctx.arc(c.pos.x, c.pos.y + yOff, c.radius, 0, PI2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        // Draw Enemies
+        this.enemies.forEach(e => {
+            ctx.fillStyle = '#ff0055';
+            if(glow) { ctx.shadowBlur = 10; ctx.shadowColor = '#f00'; }
+            ctx.beginPath();
+            if (e.type === 'charger') {
+                // Triangle for charger
+                ctx.moveTo(e.pos.x, e.pos.y - e.radius);
+                ctx.lineTo(e.pos.x + e.radius, e.pos.y + e.radius);
+                ctx.lineTo(e.pos.x - e.radius, e.pos.y + e.radius);
+            } else {
+                // Circle with spikes
+                ctx.arc(e.pos.x, e.pos.y, e.radius, 0, PI2);
+            }
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        // Draw Player
+        if (this.player.invuln > 0 && Math.floor(Date.now() / 50) % 2 === 0) {
+            // Blink when hit
+        } else {
+            ctx.fillStyle = '#00ffcc';
+            if(glow) { ctx.shadowBlur = 20; ctx.shadowColor = '#00ffcc'; }
+            ctx.beginPath();
+            ctx.arc(this.player.pos.x, this.player.pos.y, this.player.radius, 0, PI2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw Particles
+        this.particles.forEach(p => {
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life / p.maxLife;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 2, 0, PI2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        });
+
+        // Draw Cursor/Target Reticle
+        const worldMouse = { x: this.mouse.x + cx, y: this.mouse.y + cy };
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(worldMouse.x, worldMouse.y, 10, 0, PI2);
+        ctx.stroke();
+
+        ctx.restore();
+    },
+
+    // --- UI FLOW ---
+    togglePause: function() {
+        if (this.state === 'playing') {
+            this.state = 'paused';
+            this.showPanel('panel-pause');
+        } else if (this.state === 'paused') {
+            this.resume();
+        }
+    },
+    
+    resume: function() {
+        this.state = 'playing';
+        document.getElementById('ui-overlay').classList.add('hidden');
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    },
+    
+    winLevel: function() {
+        this.state = 'gameover';
+        AudioSys.playSFX('win');
+        document.getElementById('end-title').innerText = "SECTOR CLEARED";
+        document.getElementById('end-title').style.color = "#0f0";
+        document.getElementById('end-stats').innerText = `Score: ${this.score}`;
+        
+        if (this.level >= this.unlockedLevels && this.level < this.maxLevel) {
+            this.unlockedLevels++;
+            this.saveProgress();
+        }
+        
+        if (this.level === this.maxLevel) {
+            document.getElementById('btn-next').style.display = 'none';
+            document.getElementById('end-stats').innerHTML += "<br><br>CAMPAIGN COMPLETE!";
+        } else {
+            document.getElementById('btn-next').style.display = 'inline-block';
+        }
+
+        this.showPanel('panel-end');
+    },
+
+    loseLevel: function(reason) {
+        this.state = 'gameover';
+        AudioSys.playSFX('hit');
+        document.getElementById('end-title').innerText = reason.toUpperCase();
+        document.getElementById('end-title').style.color = "#f00";
+        document.getElementById('end-stats').innerText = `Final Score: ${this.score}`;
+        document.getElementById('btn-next').style.display = 'none';
+        this.showPanel('panel-end');
+    },
+
+    nextLevel: function() {
+        if(this.level < this.maxLevel) this.startLevel(this.level + 1);
+    },
+
+    restartLevel: function() {
+        this.startLevel(this.level);
+    },
+
+    quitToTitle: function() {
+        this.state = 'title';
+        this.showTitle();
+    },
+
+    // Menus
+    showPanel: function(id) {
+        document.getElementById('ui-overlay').classList.remove('hidden');
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    },
+
+    showTitle: function() {
+        document.getElementById('game-ui').classList.add('hidden');
+        this.showPanel('panel-title');
+    },
+
+    showLevelSelect: function() {
+        this.showPanel('panel-levels');
+        this.renderLevelGrid();
+    },
+
+    showHowTo: function() { this.showPanel('panel-howto'); },
+    showSettings: function() { this.showPanel('panel-settings'); },
+
+    renderLevelGrid: function() {
+        const grid = document.getElementById('level-grid');
+        grid.innerHTML = '';
+        for (let i = 1; i <= this.maxLevel; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'level-btn';
+            btn.innerText = i;
+            if (i > this.unlockedLevels) {
+                btn.disabled = true;
+                btn.style.opacity = 0.3;
+            } else {
+                btn.onclick = () => this.startLevel(i);
+            }
+            grid.appendChild(btn);
+        }
+    }
+};
+
+window.onload = function() {
+    Game.init();
+};
+
+</script>
+</body>
+</html>
