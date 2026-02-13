@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STRIKER ARENA - Penalty Showdown</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@400;600;700&family=Rajdhani:wght@500;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            overflow: hidden;
+            touch-action: none;
+            color: #fff;
+        }
+
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: linear-gradient(180deg, #1a3a52 0%, #0d1f2d 100%);
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(15, 32, 39, 0.98) 0%, rgba(32, 58, 67, 0.98) 100%);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .overlay.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .panel {
+            background: linear-gradient(135deg, #1a3a52 0%, #0d1f2d 100%);
+            border: 4px solid #4CAF50;
+            box-shadow: 0 10px 50px rgba(76, 175, 80, 0.4), inset 0 0 30px rgba(76, 175, 80, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #4CAF50, #8BC34A, #4CAF50);
+            background-size: 300% 300%;
+            border-radius: 20px;
+            z-index: -1;
+            animation: borderGlow 3s ease infinite;
+        }
+
+        @keyframes borderGlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        h1 {
+            font-family: 'Teko', sans-serif;
+            font-weight: 700;
+            font-size: 4em;
+            text-align: center;
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #4CAF50, #FFC107, #4CAF50);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 4s ease infinite;
+            text-transform: uppercase;
+            letter-spacing: 8px;
+            text-shadow: 0 0 40px rgba(76, 175, 80, 0.6);
+            line-height: 1;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .subtitle {
+            font-family: 'Teko', sans-serif;
+            text-align: center;
+            font-size: 1.8em;
+            color: #FFC107;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 30px;
+            text-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
+        }
+
+        h2 {
+            font-family: 'Teko', sans-serif;
+            color: #4CAF50;
+            margin: 25px 0 15px 0;
+            font-size: 2em;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            border-left: 5px solid #4CAF50;
+            padding-left: 15px;
+        }
+
+        p, ul {
+            line-height: 1.8;
+            margin-bottom: 15px;
+            color: #ddd;
+            font-size: 1.05em;
+        }
+
+        ul {
+            margin-left: 25px;
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+
+        strong {
+            color: #FFC107;
+            font-weight: 700;
+        }
+
+        .btn {
+            font-family: 'Teko', sans-serif;
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            border: 3px solid #4CAF50;
+            color: #fff;
+            padding: 18px 40px;
+            font-size: 1.4em;
+            font-weight: 700;
+            cursor: pointer;
+            margin: 10px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 25px rgba(76, 175, 80, 0.4);
+            border-radius: 10px;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s ease, height 0.6s ease;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 35px rgba(76, 175, 80, 0.6);
+            border-color: #8BC34A;
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .level-btn {
+            aspect-ratio: 1;
+            background: linear-gradient(135deg, #1a3a52, #0d1f2d);
+            border: 3px solid #4CAF50;
+            color: #fff;
+            font-family: 'Teko', sans-serif;
+            font-size: 2em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+        }
+
+        .level-btn::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: radial-gradient(circle, rgba(76, 175, 80, 0.3), transparent);
+            transform: translate(-50%, -50%);
+            transition: width 0.4s ease, height 0.4s ease;
+        }
+
+        .level-btn:not(.locked):hover::after {
+            width: 200%;
+            height: 200%;
+        }
+
+        .level-btn:not(.locked):hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(76, 175, 80, 0.8);
+            border-color: #FFC107;
+        }
+
+        .level-btn.locked {
+            background: linear-gradient(135deg, #1a1a1a, #0a0a0a);
+            border-color: #444;
+            color: #444;
+            cursor: not-allowed;
+        }
+
+        .level-btn.completed::before {
+            content: '⚽';
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 0.6em;
+        }
+
+        .slider-group {
+            margin: 20px 0;
+        }
+
+        .slider-group label {
+            display: block;
+            color: #4CAF50;
+            margin-bottom: 10px;
+            font-family: 'Teko', sans-serif;
+            text-transform: uppercase;
+            font-size: 1.3em;
+            letter-spacing: 2px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 8px;
+            background: #0d1f2d;
+            border: 2px solid #4CAF50;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(76, 175, 80, 0.8);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+            box-shadow: 0 0 15px rgba(76, 175, 80, 0.8);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin: 18px 0;
+            cursor: pointer;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            margin-right: 15px;
+            cursor: pointer;
+            accent-color: #4CAF50;
+        }
+
+        .checkbox-group label {
+            color: #ddd;
+            cursor: pointer;
+            user-select: none;
+            font-size: 1.1em;
+        }
+
+        .achievement {
+            background: linear-gradient(135deg, rgba(26, 58, 82, 0.6), rgba(13, 31, 45, 0.6));
+            border: 3px solid #4CAF50;
+            padding: 20px;
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            position: relative;
+            overflow: hidden;
+            opacity: 0.4;
+            transition: all 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .achievement.unlocked {
+            opacity: 1;
+            border-color: #FFC107;
+            box-shadow: 0 0 25px rgba(255, 193, 7, 0.5);
+        }
+
+        .achievement.unlocked::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 193, 7, 0.3), transparent);
+            animation: shine 4s infinite;
+        }
+
+        @keyframes shine {
+            0% { left: -100%; }
+            50%, 100% { left: 100%; }
+        }
+
+        .achievement-icon {
+            font-size: 3em;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .achievement-info {
+            flex: 1;
+        }
+
+        .achievement-title {
+            font-family: 'Teko', sans-serif;
+            font-weight: 700;
+            font-size: 1.5em;
+            color: #4CAF50;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .achievement.unlocked .achievement-title {
+            color: #FFC107;
+        }
+
+        .achievement-desc {
+            color: #aaa;
+            font-size: 1em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(76, 175, 80, 0.05));
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-family: 'Teko', sans-serif;
+            font-size: 2.5em;
+            color: #FFC107;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5em;
+                letter-spacing: 4px;
+            }
+            
+            .subtitle {
+                font-size: 1.2em;
+            }
+            
+            .btn {
+                font-size: 1.1em;
+                padding: 15px 30px;
+            }
+            
+            .level-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        /* Scrollbar styling */
+        .panel::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .panel::-webkit-scrollbar-track {
+            background: #0d1f2d;
+            border-radius: 10px;
+        }
+
+        .panel::-webkit-scrollbar-thumb {
+            background: #4CAF50;
+            border-radius: 10px;
+        }
+
+        .panel::-webkit-scrollbar-thumb:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Title Screen -->
+    <div id="titleScreen" class="overlay active">
+        <div class="panel">
+            <h1>STRIKER<br>ARENA</h1>
+            <div class="subtitle">⚽ PENALTY SHOWDOWN ⚽</div>
+            <div class="btn-grid">
+                <button class="btn" onclick="game.startGame()">⚡ PLAY NOW</button>
+                <button class="btn" onclick="game.showLevelSelect()">🎯 LEVELS</button>
+                <button class="btn" onclick="game.showHowToPlay()">📖 GUIDE</button>
+                <button class="btn" onclick="game.showSettings()">⚙ SETTINGS</button>
+                <button class="btn" onclick="game.showAchievements()">🏆 TROPHIES</button>
+                <button class="btn" onclick="window.location.href='../index.html'">Main Menu</button>
+            </div>
+            <p style="text-align: center; margin-top: 30px; color: #666; font-size: 0.9em;">
+                SEED: 2026-02-13 | BUILD: STRIKER.v1
+            </p>
+        </div>
+    </div>
+
+    <!-- How To Play -->
+    <div id="howToPlayScreen" class="overlay">
+        <div class="panel">
+            <h1 style="font-size: 2.5em;">HOW TO PLAY</h1>
+            
+            <h2>⚽ THE MATCH</h2>
+            <p>Welcome to Striker Arena! You'll face intense penalty shootouts where you both shoot AND defend. Master timing, power, and placement to become the ultimate striker!</p>
+            
+            <h2>🎯 OBJECTIVE</h2>
+            <p>Each level is a penalty shootout match. Score more goals than your opponent to win! Complete levels to unlock harder opponents and special challenges.</p>
+            
+            <h2>🥅 SHOOTING PHASE</h2>
+            <p><strong>Desktop:</strong></p>
+            <ul>
+                <li><strong>Click & Hold</strong> - Build up power (watch the power meter!)</li>
+                <li><strong>Move Mouse</strong> - Aim at the goal (crosshair shows target)</li>
+                <li><strong>Release Click</strong> - SHOOT! Ball curves based on aim</li>
+                <li><strong>Timing is KEY</strong> - Too much power = over the bar!</li>
+            </ul>
+            
+            <p><strong>Mobile:</strong></p>
+            <ul>
+                <li><strong>Touch & Hold</strong> - Build power</li>
+                <li><strong>Drag</strong> - Aim your shot</li>
+                <li><strong>Release</strong> - Fire!</li>
+            </ul>
+            
+            <h2>🧤 GOALKEEPER PHASE</h2>
+            <p><strong>Desktop:</strong></p>
+            <ul>
+                <li><strong>Move Mouse Left/Right</strong> - Position your keeper</li>
+                <li><strong>Click/Space</strong> - DIVE to save the ball!</li>
+                <li><strong>React Fast</strong> - You only have a split second!</li>
+            </ul>
+            
+            <p><strong>Mobile:</strong></p>
+            <ul>
+                <li><strong>Drag Keeper</strong> - Move goalkeeper left/right</li>
+                <li><strong>Tap</strong> - Dive to make the save!</li>
+            </ul>
+            
+            <h2>⚡ ADVANCED MECHANICS</h2>
+            <ul>
+                <li><strong>Power Zones:</strong> Green = perfect power, Yellow = risky, Red = way over!</li>
+                <li><strong>Curve Shots:</strong> Aim far left/right for spectacular curves</li>
+                <li><strong>Feints:</strong> Aim one way, then quickly redirect before shooting</li>
+                <li><strong>Keeper Reading:</strong> Watch opponent's body language before diving</li>
+                <li><strong>Corner Shots:</strong> Top corners are hardest to save but riskiest</li>
+                <li><strong>Mind Games:</strong> Change your shooting pattern to confuse AI</li>
+            </ul>
+            
+            <h2>💯 SCORING SYSTEM</h2>
+            <ul>
+                <li><strong>Score:</strong> +100 points per goal</li>
+                <li><strong>Save:</strong> +75 points per save</li>
+                <li><strong>Perfect Shot:</strong> +50 bonus (top corner goal)</li>
+                <li><strong>Perfect Save:</strong> +50 bonus (spectacular dive save)</li>
+                <li><strong>Clean Sheet:</strong> +200 bonus (don't concede any goals)</li>
+                <li><strong>Hat-trick:</strong> +300 bonus (score 3+ goals in match)</li>
+                <li><strong>Speed Bonus:</strong> Win faster = more points</li>
+            </ul>
+            
+            <h2>🏟️ MATCH FORMAT</h2>
+            <ul>
+                <li>Each match is <strong>5 penalties each</strong> (10 total)</li>
+                <li>You and opponent take turns: you shoot, they shoot</li>
+                <li>Most goals after 5 rounds wins!</li>
+                <li>If tied after 5: <strong>Sudden Death!</strong> First to score wins</li>
+                <li>Higher levels = smarter AI, faster reaction needed</li>
+            </ul>
+            
+            <h2>🎨 VISUAL GUIDE</h2>
+            <ul>
+                <li><strong>Green Crosshair:</strong> Your aim point (moves with mouse)</li>
+                <li><strong>Power Meter:</strong> Bottom bar (green/yellow/red zones)</li>
+                <li><strong>Ball Trail:</strong> Shows your shot trajectory</li>
+                <li><strong>Goalkeeper Glow:</strong> Opponent keeper position</li>
+                <li><strong>Score Display:</strong> Top of screen (You vs Opponent)</li>
+            </ul>
+            
+            <h2>🏆 PRO TIPS</h2>
+            <ul>
+                <li>Don't always shoot to the same spot - mix it up!</li>
+                <li>Watch the keeper's position before shooting</li>
+                <li>Practice makes perfect - learn the power sweet spot</li>
+                <li>When goalkeeping, don't commit too early</li>
+                <li>Top corners = high risk, high reward</li>
+                <li>Use mind games: pause before shooting to bait the keeper</li>
+                <li>In sudden death, stay calm and trust your instincts</li>
+            </ul>
+            
+            <button class="btn" onclick="game.hideOverlay('howToPlayScreen')">✓ LET'S PLAY!</button>
+        </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="settingsScreen" class="overlay">
+        <div class="panel">
+            <h1 style="font-size: 2.5em;">SETTINGS</h1>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="muteCheck" onchange="game.toggleMute()">
+                <label for="muteCheck">🔇 MUTE ALL SOUNDS</label>
+            </div>
+            
+            <div class="slider-group">
+                <label for="musicVol">🎵 MUSIC VOLUME</label>
+                <input type="range" id="musicVol" class="slider" min="0" max="100" value="50" oninput="game.setMusicVolume(this.value)">
+            </div>
+            
+            <div class="slider-group">
+                <label for="sfxVol">🔊 SFX VOLUME</label>
+                <input type="range" id="sfxVol" class="slider" min="0" max="100" value="70" oninput="game.setSFXVolume(this.value)">
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="reducedMotionCheck" onchange="game.toggleReducedMotion()">
+                <label for="reducedMotionCheck">🎭 REDUCED MOTION</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="particlesCheck" onchange="game.toggleParticles()" checked>
+                <label for="particlesCheck">✨ PARTICLE EFFECTS</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="screenShakeCheck" onchange="game.toggleScreenShake()" checked>
+                <label for="screenShakeCheck">📳 SCREEN SHAKE</label>
+            </div>
+            
+            <button class="btn" onclick="game.resetProgress()">🔄 RESET PROGRESS</button>
+            <button class="btn" onclick="game.hideOverlay('settingsScreen')">← BACK</button>
+        </div>
+    </div>
+
+    <!-- Level Select -->
+    <div id="levelSelectScreen" class="overlay">
+        <div class="panel">
+            <h1 style="font-size: 2.5em;">SELECT LEVEL</h1>
+            <p style="text-align: center; margin-bottom: 20px; color: #4CAF50; font-size: 1.2em;">
+                Beat matches to unlock tougher opponents!
+            </p>
+            <div id="levelGrid" class="level-grid"></div>
+            <button class="btn" onclick="game.hideOverlay('levelSelectScreen')" style="margin-top: 30px;">← BACK</button>
+        </div>
+    </div>
+
+    <!-- Achievements -->
+    <div id="achievementsScreen" class="overlay">
+        <div class="panel">
+            <h1 style="font-size: 2.5em;">ACHIEVEMENTS</h1>
+            <div id="achievementsList"></div>
+            <button class="btn" onclick="game.hideOverlay('achievementsScreen')" style="margin-top: 30px;">← BACK</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // CONFIGURATION
+        // ============================================================================
+        
+        const CONFIG = {
+            width: 800,
+            height: 600,
+            goalWidth: 400,
+            goalHeight: 200,
+            goalX: 200,
+            goalY: 150,
+            ballRadius: 12,
+            maxPower: 25,
+            gravity: 0.4,
+            penaltiesPerMatch: 5
+        };
+
+        // ============================================================================
+        // SEEDED RANDOM
+        // ============================================================================
+        
+        class Random {
+            constructor(seed) {
+                this.seed = seed;
+            }
+            
+            next() {
+                this.seed = (this.seed * 9301 + 49297) % 233280;
+                return this.seed / 233280;
+            }
+            
+            range(min, max) {
+                return min + this.next() * (max - min);
+            }
+        }
+
+        // ============================================================================
+        // AUDIO ENGINE
+        // ============================================================================
+        
+        class AudioEngine {
+            constructor() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.masterGain = this.ctx.createGain();
+                this.musicGain = this.ctx.createGain();
+                this.sfxGain = this.ctx.createGain();
+                
+                this.masterGain.connect(this.ctx.destination);
+                this.musicGain.connect(this.masterGain);
+                this.sfxGain.connect(this.masterGain);
+                
+                this.musicGain.gain.value = 0.5;
+                this.sfxGain.gain.value = 0.7;
+                this.muted = false;
+            }
+            
+            beep(freq, duration, type = 'sine', vol = 0.3) {
+                if (this.muted) return;
+                
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.frequency.value = freq;
+                osc.type = type;
+                
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(this.sfxGain);
+                
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+            
+            kick() {
+                this.beep(100, 0.15, 'sine', 0.5);
+                this.beep(150, 0.1, 'sine', 0.3);
+            }
+            
+            goal() {
+                setTimeout(() => this.beep(523, 0.15, 'square', 0.3), 0);
+                setTimeout(() => this.beep(659, 0.15, 'square', 0.3), 150);
+                setTimeout(() => this.beep(784, 0.2, 'square', 0.3), 300);
+                setTimeout(() => this.beep(1047, 0.3, 'square', 0.4), 450);
+            }
+            
+            save() {
+                this.beep(800, 0.2, 'sine', 0.4);
+                this.beep(600, 0.2, 'sine', 0.3);
+            }
+            
+            miss() {
+                this.beep(200, 0.3, 'sawtooth', 0.3);
+            }
+            
+            whistle() {
+                this.beep(1200, 0.15, 'sine', 0.3);
+            }
+            
+            crowd(happy) {
+                const freq = happy ? 400 : 200;
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => {
+                        this.beep(freq + Math.random() * 200, 0.1, 'sawtooth', 0.15);
+                    }, i * 50);
+                }
+            }
+            
+            setMusicVolume(val) {
+                this.musicGain.gain.value = val / 100;
+            }
+            
+            setSFXVolume(val) {
+                this.sfxGain.gain.value = val / 100;
+            }
+            
+            toggleMute() {
+                this.muted = !this.muted;
+                this.masterGain.gain.value = this.muted ? 0 : 1;
+                return this.muted;
+            }
+        }
+
+        // ============================================================================
+        // PARTICLE SYSTEM
+        // ============================================================================
+        
+        class Particle {
+            constructor(x, y, vx, vy, color, size, life) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.color = color;
+                this.size = size;
+                this.life = life;
+                this.maxLife = life;
+            }
+            
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.2;
+                this.life--;
+                return this.life > 0;
+            }
+            
+            draw(ctx) {
+                const alpha = this.life / this.maxLife;
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class ParticleSystem {
+            constructor() {
+                this.particles = [];
+            }
+            
+            burst(x, y, color, count = 20) {
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 2 + Math.random() * 5;
+                    const vx = Math.cos(angle) * speed;
+                    const vy = Math.sin(angle) * speed - 3;
+                    const size = 3 + Math.random() * 5;
+                    const life = 20 + Math.random() * 30;
+                    
+                    this.particles.push(new Particle(x, y, vx, vy, color, size, life));
+                }
+            }
+            
+            update() {
+                this.particles = this.particles.filter(p => p.update());
+            }
+            
+            draw(ctx) {
+                this.particles.forEach(p => p.draw(ctx));
+            }
+            
+            clear() {
+                this.particles = [];
+            }
+        }
+
+        // ============================================================================
+        // GAME ENTITIES
+        // ============================================================================
+        
+        class Ball {
+            constructor() {
+                this.reset();
+            }
+            
+            reset() {
+                this.x = CONFIG.width / 2;
+                this.y = CONFIG.height - 100;
+                this.vx = 0;
+                this.vy = 0;
+                this.radius = CONFIG.ballRadius;
+                this.flying = false;
+                this.trail = [];
+            }
+            
+            shoot(targetX, targetY, power) {
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                this.vx = (dx / dist) * power;
+                this.vy = (dy / dist) * power;
+                this.flying = true;
+            }
+            
+            update() {
+                if (this.flying) {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.vy += CONFIG.gravity;
+                    
+                    this.trail.push({ x: this.x, y: this.y });
+                    if (this.trail.length > 15) this.trail.shift();
+                }
+            }
+            
+            draw(ctx, reducedMotion) {
+                // Trail
+                if (!reducedMotion && this.trail.length > 0) {
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(this.trail[0].x, this.trail[0].y);
+                    this.trail.forEach(p => ctx.lineTo(p.x, p.y));
+                    ctx.stroke();
+                    ctx.restore();
+                }
+                
+                // Ball
+                ctx.save();
+                ctx.fillStyle = '#fff';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#fff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Pattern
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.7, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * Math.PI * 2) / 5;
+                    const x = this.x + Math.cos(angle) * this.radius * 0.7;
+                    const y = this.y + Math.sin(angle) * this.radius * 0.7;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        class Goalkeeper {
+            constructor(isAI = false) {
+                this.isAI = isAI;
+                this.x = CONFIG.width / 2;
+                this.y = CONFIG.goalY + CONFIG.goalHeight - 30;
+                this.width = 40;
+                this.height = 60;
+                this.diving = false;
+                this.diveTarget = 0;
+                this.diveSpeed = 15;
+            }
+            
+            dive(direction) {
+                if (!this.diving) {
+                    this.diving = true;
+                    this.diveTarget = direction;
+                }
+            }
+            
+            update() {
+                if (this.diving) {
+                    this.x += this.diveTarget * this.diveSpeed;
+                    this.diveSpeed *= 0.9;
+                    
+                    if (Math.abs(this.diveSpeed) < 0.5) {
+                        this.diving = false;
+                        this.diveSpeed = 15;
+                    }
+                }
+            }
+            
+            checkSave(ball) {
+                if (!ball.flying) return false;
+                
+                const dx = Math.abs(ball.x - this.x);
+                const dy = Math.abs(ball.y - this.y);
+                
+                return dx < this.width && dy < this.height;
+            }
+            
+            aiDecide(ball, difficulty) {
+                if (!ball.flying) return;
+                
+                // AI reaction based on difficulty
+                const reactionDelay = 15 - difficulty * 1.5;
+                
+                if (ball.y < CONFIG.goalY + 100 && !this.diving) {
+                    // Decide which way to dive
+                    const targetX = ball.x + ball.vx * reactionDelay;
+                    
+                    if (Math.abs(targetX - this.x) > 50) {
+                        const direction = targetX > this.x ? 1 : -1;
+                        
+                        // Higher difficulty = better prediction
+                        if (Math.random() < 0.3 + difficulty * 0.07) {
+                            this.dive(direction);
+                        }
+                    }
+                }
+            }
+            
+            reset() {
+                this.x = CONFIG.width / 2;
+                this.diving = false;
+                this.diveSpeed = 15;
+            }
+            
+            draw(ctx) {
+                ctx.save();
+                
+                // Body
+                ctx.fillStyle = this.isAI ? '#F44336' : '#4CAF50';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.isAI ? '#F44336' : '#4CAF50';
+                
+                if (this.diving) {
+                    // Diving pose
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(this.diveTarget > 0 ? -Math.PI / 6 : Math.PI / 6);
+                    ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+                    ctx.restore();
+                } else {
+                    // Standing pose
+                    ctx.fillRect(this.x - this.width / 2, this.y - this.height / 2, 
+                                this.width, this.height);
+                    
+                    // Arms
+                    ctx.fillRect(this.x - this.width / 2 - 15, this.y - 10, 15, 8);
+                    ctx.fillRect(this.x + this.width / 2, this.y - 10, 15, 8);
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        // ============================================================================
+        // MAIN GAME
+        // ============================================================================
+        
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                
+                this.setupCanvas();
+                window.addEventListener('resize', () => this.setupCanvas());
+                
+                this.audio = new AudioEngine();
+                this.particles = new ParticleSystem();
+                this.rng = new Random(20260213);
+                
+                this.state = 'menu'; // menu, aiming, shooting, keepering, result
+                this.phase = 'player'; // player or opponent
+                
+                this.ball = new Ball();
+                this.playerKeeper = new Goalkeeper(false);
+                this.opponentKeeper = new Goalkeeper(true);
+                
+                this.level = 1;
+                this.playerScore = 0;
+                this.opponentScore = 0;
+                this.round = 1;
+                this.totalScore = 0;
+                
+                this.aimX = CONFIG.width / 2;
+                this.aimY = CONFIG.goalY + 100;
+                this.power = 0;
+                this.charging = false;
+                this.maxPower = CONFIG.maxPower;
+                
+                this.shake = 0;
+                
+                this.settings = {
+                    muted: false,
+                    musicVol: 50,
+                    sfxVol: 70,
+                    reducedMotion: false,
+                    particles: true,
+                    screenShake: true
+                };
+                
+                this.progress = {
+                    levelsUnlocked: 1,
+                    highScore: 0,
+                    totalGoals: 0,
+                    totalSaves: 0,
+                    totalMatches: 0,
+                    achievements: {
+                        firstGoal: false,
+                        firstSave: false,
+                        firstWin: false,
+                        perfectShot: false,
+                        perfectSave: false,
+                        hatTrick: false,
+                        cleanSheet: false,
+                        level5: false,
+                        level10: false,
+                        striker100: false
+                    }
+                };
+                
+                this.setupInput();
+                this.loadProgress();
+                this.loadSettings();
+                
+                this.lastTime = performance.now();
+                this.loop();
+            }
+            
+            setupCanvas() {
+                const dpr = window.devicePixelRatio || 1;
+                this.canvas.width = CONFIG.width * dpr;
+                this.canvas.height = CONFIG.height * dpr;
+                this.canvas.style.width = CONFIG.width + 'px';
+                this.canvas.style.height = CONFIG.height + 'px';
+                this.ctx.scale(dpr, dpr);
+            }
+            
+            setupInput() {
+                this.canvas.addEventListener('mousedown', (e) => {
+                    if (this.state === 'aiming') {
+                        this.charging = true;
+                    } else if (this.state === 'keepering') {
+                        this.playerKeeper.dive(this.aimX > CONFIG.width / 2 ? 1 : -1);
+                    }
+                });
+                
+                this.canvas.addEventListener('mouseup', (e) => {
+                    if (this.state === 'aiming' && this.charging) {
+                        this.shoot();
+                    }
+                });
+                
+                this.canvas.addEventListener('mousemove', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.aimX = (e.clientX - rect.left) * (CONFIG.width / rect.width);
+                    this.aimY = (e.clientY - rect.top) * (CONFIG.height / rect.height);
+                });
+                
+                // Touch events
+                this.canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.aimX = (touch.clientX - rect.left) * (CONFIG.width / rect.width);
+                    this.aimY = (touch.clientY - rect.top) * (CONFIG.height / rect.height);
+                    
+                    if (this.state === 'aiming') {
+                        this.charging = true;
+                    } else if (this.state === 'keepering') {
+                        this.playerKeeper.dive(this.aimX > CONFIG.width / 2 ? 1 : -1);
+                    }
+                });
+                
+                this.canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    if (this.state === 'aiming' && this.charging) {
+                        this.shoot();
+                    }
+                });
+                
+                this.canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.aimX = (touch.clientX - rect.left) * (CONFIG.width / rect.width);
+                    this.aimY = (touch.clientY - rect.top) * (CONFIG.height / rect.height);
+                });
+                
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === ' ' && this.state === 'keepering') {
+                        this.playerKeeper.dive(this.aimX > CONFIG.width / 2 ? 1 : -1);
+                    }
+                });
+            }
+            
+            loadProgress() {
+                const saved = localStorage.getItem('strikerArenaProgress');
+                if (saved) {
+                    this.progress = { ...this.progress, ...JSON.parse(saved) };
+                }
+            }
+            
+            saveProgress() {
+                localStorage.setItem('strikerArenaProgress', JSON.stringify(this.progress));
+            }
+            
+            loadSettings() {
+                const saved = localStorage.getItem('strikerArenaSettings');
+                if (saved) {
+                    this.settings = { ...this.settings, ...JSON.parse(saved) };
+                    document.getElementById('muteCheck').checked = this.settings.muted;
+                    document.getElementById('musicVol').value = this.settings.musicVol;
+                    document.getElementById('sfxVol').value = this.settings.sfxVol;
+                    document.getElementById('reducedMotionCheck').checked = this.settings.reducedMotion;
+                    document.getElementById('particlesCheck').checked = this.settings.particles;
+                    document.getElementById('screenShakeCheck').checked = this.settings.screenShake;
+                    
+                    if (this.settings.muted) this.audio.toggleMute();
+                    this.audio.setMusicVolume(this.settings.musicVol);
+                    this.audio.setSFXVolume(this.settings.sfxVol);
+                }
+            }
+            
+            saveSettings() {
+                localStorage.setItem('strikerArenaSettings', JSON.stringify(this.settings));
+            }
+            
+            startGame(levelNum = 1) {
+                this.level = levelNum;
+                this.playerScore = 0;
+                this.opponentScore = 0;
+                this.round = 1;
+                this.totalScore = 0;
+                this.phase = 'player';
+                
+                this.hideAllOverlays();
+                this.startPlayerTurn();
+            }
+            
+            startPlayerTurn() {
+                this.state = 'aiming';
+                this.phase = 'player';
+                this.ball.reset();
+                this.opponentKeeper.reset();
+                this.power = 0;
+                this.charging = false;
+                
+                setTimeout(() => {
+                    this.audio.whistle();
+                }, 500);
+            }
+            
+            startOpponentTurn() {
+                this.state = 'keepering';
+                this.phase = 'opponent';
+                this.ball.reset();
+                this.playerKeeper.reset();
+                
+                setTimeout(() => {
+                    this.audio.whistle();
+                    this.opponentShoot();
+                }, 1000);
+            }
+            
+            shoot() {
+                this.charging = false;
+                this.state = 'shooting';
+                
+                // Clamp aim to goal area
+                const targetX = Math.max(CONFIG.goalX, 
+                                Math.min(CONFIG.goalX + CONFIG.goalWidth, this.aimX));
+                const targetY = Math.max(CONFIG.goalY, 
+                                Math.min(CONFIG.goalY + CONFIG.goalHeight, this.aimY));
+                
+                this.ball.shoot(targetX, targetY, this.power);
+                this.audio.kick();
+                
+                if (this.settings.particles) {
+                    this.particles.burst(this.ball.x, this.ball.y, '#fff', 15);
+                }
+            }
+            
+            opponentShoot() {
+                const difficulty = this.level;
+                
+                // AI shooting
+                const randomness = 50 - difficulty * 3;
+                const targetX = CONFIG.goalX + CONFIG.goalWidth / 2 + 
+                               (Math.random() - 0.5) * randomness;
+                const targetY = CONFIG.goalY + CONFIG.goalHeight / 2 + 
+                               (Math.random() - 0.5) * randomness;
+                
+                const power = 15 + Math.random() * 8 + difficulty * 0.5;
+                
+                this.ball.shoot(targetX, targetY, power);
+                this.audio.kick();
+                
+                if (this.settings.particles) {
+                    this.particles.burst(this.ball.x, this.ball.y, '#fff', 15);
+                }
+            }
+            
+            checkGoal() {
+                const inGoalX = this.ball.x > CONFIG.goalX && 
+                               this.ball.x < CONFIG.goalX + CONFIG.goalWidth;
+                const inGoalY = this.ball.y > CONFIG.goalY && 
+                               this.ball.y < CONFIG.goalY + CONFIG.goalHeight;
+                
+                return inGoalX && inGoalY;
+            }
+            
+            resolveShot() {
+                const isGoal = this.checkGoal();
+                const keeper = this.phase === 'player' ? this.opponentKeeper : this.playerKeeper;
+                const saved = keeper.checkSave(this.ball);
+                
+                if (saved) {
+                    // SAVE!
+                    this.audio.save();
+                    this.audio.crowd(this.phase === 'opponent');
+                    
+                    if (this.settings.particles) {
+                        this.particles.burst(this.ball.x, this.ball.y, '#4CAF50', 30);
+                    }
+                    
+                    if (this.settings.screenShake) {
+                        this.shake = 10;
+                    }
+                    
+                    if (this.phase === 'opponent') {
+                        this.totalScore += 75;
+                        this.progress.totalSaves++;
+                        
+                        if (!this.progress.achievements.firstSave) {
+                            this.unlockAchievement('firstSave');
+                        }
+                        
+                        // Check for perfect save
+                        const distance = Math.abs(this.ball.x - keeper.x);
+                        if (distance > 80 && !this.progress.achievements.perfectSave) {
+                            this.unlockAchievement('perfectSave');
+                            this.totalScore += 50;
+                        }
+                    }
+                    
+                    setTimeout(() => this.nextTurn(), 2000);
+                } else if (isGoal) {
+                    // GOAL!
+                    this.audio.goal();
+                    this.audio.crowd(this.phase === 'player');
+                    
+                    if (this.settings.particles) {
+                        this.particles.burst(this.ball.x, this.ball.y, '#FFC107', 50);
+                    }
+                    
+                    if (this.settings.screenShake) {
+                        this.shake = 15;
+                    }
+                    
+                    if (this.phase === 'player') {
+                        this.playerScore++;
+                        this.totalScore += 100;
+                        this.progress.totalGoals++;
+                        
+                        if (!this.progress.achievements.firstGoal) {
+                            this.unlockAchievement('firstGoal');
+                        }
+                        
+                        // Check for perfect shot (corner goal)
+                        const distFromCenter = Math.abs(this.ball.x - (CONFIG.goalX + CONFIG.goalWidth / 2));
+                        const topCorner = this.ball.y < CONFIG.goalY + 50;
+                        if (distFromCenter > CONFIG.goalWidth / 2 - 30 && topCorner) {
+                            if (!this.progress.achievements.perfectShot) {
+                                this.unlockAchievement('perfectShot');
+                            }
+                            this.totalScore += 50;
+                        }
+                        
+                        // Hat-trick check
+                        if (this.playerScore >= 3 && !this.progress.achievements.hatTrick) {
+                            this.unlockAchievement('hatTrick');
+                            this.totalScore += 300;
+                        }
+                    } else {
+                        this.opponentScore++;
+                    }
+                    
+                    setTimeout(() => this.nextTurn(), 2000);
+                } else {
+                    // MISS!
+                    this.audio.miss();
+                    this.audio.crowd(false);
+                    
+                    setTimeout(() => this.nextTurn(), 2000);
+                }
+            }
+            
+            nextTurn() {
+                if (this.phase === 'player') {
+                    // Switch to opponent's turn
+                    this.startOpponentTurn();
+                } else {
+                    // Round complete
+                    this.round++;
+                    
+                    if (this.round > CONFIG.penaltiesPerMatch) {
+                        // Match over
+                        this.endMatch();
+                    } else {
+                        // Next round
+                        this.startPlayerTurn();
+                    }
+                }
+            }
+            
+            endMatch() {
+                this.state = 'menu';
+                this.progress.totalMatches++;
+                
+                const won = this.playerScore > this.opponentScore;
+                
+                if (won) {
+                    // Win bonuses
+                    if (this.opponentScore === 0) {
+                        // Clean sheet
+                        if (!this.progress.achievements.cleanSheet) {
+                            this.unlockAchievement('cleanSheet');
+                        }
+                        this.totalScore += 200;
+                    }
+                    
+                    if (!this.progress.achievements.firstWin) {
+                        this.unlockAchievement('firstWin');
+                    }
+                    
+                    // Unlock next level
+                    if (this.level >= this.progress.levelsUnlocked) {
+                        this.progress.levelsUnlocked = Math.min(10, this.level + 1);
+                    }
+                    
+                    if (this.level >= 5 && !this.progress.achievements.level5) {
+                        this.unlockAchievement('level5');
+                    }
+                    
+                    if (this.level >= 10 && !this.progress.achievements.level10) {
+                        this.unlockAchievement('level10');
+                    }
+                }
+                
+                if (this.totalScore > this.progress.highScore) {
+                    this.progress.highScore = this.totalScore;
+                }
+                
+                if (this.progress.totalGoals >= 100 && !this.progress.achievements.striker100) {
+                    this.unlockAchievement('striker100');
+                }
+                
+                this.saveProgress();
+                
+                setTimeout(() => {
+                    const result = won ? 'VICTORY!' : 
+                                  this.playerScore === this.opponentScore ? 'DRAW!' : 'DEFEAT!';
+                    alert(`${result}\n\nFinal Score: ${this.playerScore} - ${this.opponentScore}\nPoints: ${this.totalScore}\nHigh Score: ${this.progress.highScore}`);
+                    this.showOverlay('titleScreen');
+                }, 500);
+            }
+            
+            unlockAchievement(id) {
+                if (!this.progress.achievements[id]) {
+                    this.progress.achievements[id] = true;
+                    this.saveProgress();
+                }
+            }
+            
+            update(dt) {
+                if (this.state === 'aiming' && this.charging) {
+                    this.power = Math.min(this.maxPower, this.power + 0.5 * dt);
+                }
+                
+                if (this.state === 'shooting') {
+                    this.ball.update();
+                    
+                    if (this.phase === 'player') {
+                        this.opponentKeeper.update();
+                        this.opponentKeeper.aiDecide(this.ball, this.level);
+                    } else {
+                        this.playerKeeper.update();
+                    }
+                    
+                    // Check if shot is resolved
+                    if (this.ball.y < 0 || this.ball.x < 0 || this.ball.x > CONFIG.width || 
+                        this.ball.y > CONFIG.height) {
+                        this.resolveShot();
+                        this.state = 'result';
+                    } else if (this.ball.y <= CONFIG.goalY + CONFIG.goalHeight) {
+                        this.resolveShot();
+                        this.state = 'result';
+                    }
+                }
+                
+                if (this.state === 'keepering') {
+                    this.ball.update();
+                    this.playerKeeper.update();
+                    
+                    // Check if shot is resolved
+                    if (this.ball.y < 0 || this.ball.x < 0 || this.ball.x > CONFIG.width || 
+                        this.ball.y > CONFIG.height) {
+                        this.resolveShot();
+                        this.state = 'result';
+                    } else if (this.ball.y <= CONFIG.goalY + CONFIG.goalHeight) {
+                        this.resolveShot();
+                        this.state = 'result';
+                    }
+                }
+                
+                this.particles.update();
+                
+                if (this.shake > 0) {
+                    this.shake *= 0.9;
+                    if (this.shake < 0.5) this.shake = 0;
+                }
+            }
+            
+            draw() {
+                this.ctx.save();
+                
+                // Screen shake
+                if (this.shake > 0 && this.settings.screenShake) {
+                    const offsetX = (Math.random() - 0.5) * this.shake;
+                    const offsetY = (Math.random() - 0.5) * this.shake;
+                    this.ctx.translate(offsetX, offsetY);
+                }
+                
+                // Background - grass field
+                const gradient = this.ctx.createLinearGradient(0, CONFIG.height / 2, 0, CONFIG.height);
+                gradient.addColorStop(0, '#2d5016');
+                gradient.addColorStop(1, '#1a3a0e');
+                this.ctx.fillStyle = gradient;
+                this.ctx.fillRect(0, 0, CONFIG.width, CONFIG.height);
+                
+                // Grass stripes
+                for (let i = 0; i < 10; i++) {
+                    if (i % 2 === 0) {
+                        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                        this.ctx.fillRect(0, i * 60, CONFIG.width, 60);
+                    }
+                }
+                
+                if (this.state !== 'menu') {
+                    // Draw goal
+                    this.ctx.strokeStyle = '#fff';
+                    this.ctx.lineWidth = 5;
+                    this.ctx.shadowBlur = 10;
+                    this.ctx.shadowColor = '#fff';
+                    this.ctx.strokeRect(CONFIG.goalX, CONFIG.goalY, CONFIG.goalWidth, CONFIG.goalHeight);
+                    
+                    // Goal net
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.lineWidth = 1;
+                    for (let i = 0; i < CONFIG.goalWidth; i += 20) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(CONFIG.goalX + i, CONFIG.goalY);
+                        this.ctx.lineTo(CONFIG.goalX + i, CONFIG.goalY + CONFIG.goalHeight);
+                        this.ctx.stroke();
+                    }
+                    for (let i = 0; i < CONFIG.goalHeight; i += 20) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(CONFIG.goalX, CONFIG.goalY + i);
+                        this.ctx.lineTo(CONFIG.goalX + CONFIG.goalWidth, CONFIG.goalY + i);
+                        this.ctx.stroke();
+                    }
+                    this.ctx.shadowBlur = 0;
+                    
+                    // Draw entities
+                    if (this.phase === 'player') {
+                        this.opponentKeeper.draw(this.ctx);
+                    } else {
+                        this.playerKeeper.draw(this.ctx);
+                    }
+                    
+                    this.particles.draw(this.ctx);
+                    this.ball.draw(this.ctx, this.settings.reducedMotion);
+                    
+                    // Aiming crosshair
+                    if (this.state === 'aiming') {
+                        this.ctx.strokeStyle = '#4CAF50';
+                        this.ctx.lineWidth = 3;
+                        this.ctx.shadowBlur = 15;
+                        this.ctx.shadowColor = '#4CAF50';
+                        this.ctx.beginPath();
+                        this.ctx.arc(this.aimX, this.aimY, 20, 0, Math.PI * 2);
+                        this.ctx.stroke();
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(this.aimX - 30, this.aimY);
+                        this.ctx.lineTo(this.aimX + 30, this.aimY);
+                        this.ctx.moveTo(this.aimX, this.aimY - 30);
+                        this.ctx.lineTo(this.aimX, this.aimY + 30);
+                        this.ctx.stroke();
+                        this.ctx.shadowBlur = 0;
+                    }
+                    
+                    // Power meter
+                    if (this.state === 'aiming') {
+                        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        this.ctx.fillRect(CONFIG.width / 2 - 150, CONFIG.height - 60, 300, 40);
+                        
+                        const powerPercent = this.power / this.maxPower;
+                        let barColor = '#4CAF50';
+                        if (powerPercent > 0.8) barColor = '#F44336';
+                        else if (powerPercent > 0.6) barColor = '#FFC107';
+                        
+                        this.ctx.fillStyle = barColor;
+                        this.ctx.shadowBlur = 15;
+                        this.ctx.shadowColor = barColor;
+                        this.ctx.fillRect(CONFIG.width / 2 - 145, CONFIG.height - 55, 
+                                         290 * powerPercent, 30);
+                        this.ctx.shadowBlur = 0;
+                        
+                        this.ctx.fillStyle = '#fff';
+                        this.ctx.font = 'bold 16px Teko';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.fillText('POWER', CONFIG.width / 2, CONFIG.height - 35);
+                    }
+                    
+                    // HUD
+                    this.drawHUD();
+                }
+                
+                this.ctx.restore();
+            }
+            
+            drawHUD() {
+                this.ctx.save();
+                
+                // Score
+                this.ctx.font = 'bold 48px Teko';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillStyle = '#4CAF50';
+                this.ctx.shadowBlur = 20;
+                this.ctx.shadowColor = '#4CAF50';
+                this.ctx.fillText(`${this.playerScore} - ${this.opponentScore}`, CONFIG.width / 2, 50);
+                
+                // Round
+                this.ctx.font = 'bold 24px Teko';
+                this.ctx.fillStyle = '#FFC107';
+                this.ctx.shadowColor = '#FFC107';
+                this.ctx.fillText(`ROUND ${this.round}/${CONFIG.penaltiesPerMatch}`, CONFIG.width / 2, 80);
+                
+                // Level & Score
+                this.ctx.font = 'bold 20px Teko';
+                this.ctx.textAlign = 'left';
+                this.ctx.fillStyle = '#fff';
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = '#fff';
+                this.ctx.fillText(`LEVEL ${this.level}`, 20, 30);
+                this.ctx.fillText(`SCORE: ${this.totalScore}`, 20, 55);
+                
+                // Phase indicator
+                this.ctx.textAlign = 'right';
+                const phaseText = this.phase === 'player' ? 'YOUR TURN' : 'OPPONENT TURN';
+                const phaseColor = this.phase === 'player' ? '#4CAF50' : '#F44336';
+                this.ctx.fillStyle = phaseColor;
+                this.ctx.shadowColor = phaseColor;
+                this.ctx.fillText(phaseText, CONFIG.width - 20, 30);
+                
+                const actionText = this.state === 'aiming' ? 'SHOOT!' : 
+                                  this.state === 'keepering' ? 'SAVE!' : '';
+                this.ctx.fillText(actionText, CONFIG.width - 20, 55);
+                
+                this.ctx.restore();
+            }
+            
+            loop() {
+                const now = performance.now();
+                const dt = Math.min((now - this.lastTime) / 16.67, 3);
+                this.lastTime = now;
+                
+                this.update(dt);
+                this.draw();
+                
+                requestAnimationFrame(() => this.loop());
+            }
+            
+            // UI Methods
+            showOverlay(id) {
+                document.getElementById(id).classList.add('active');
+            }
+            
+            hideOverlay(id) {
+                document.getElementById(id).classList.remove('active');
+            }
+            
+            hideAllOverlays() {
+                document.querySelectorAll('.overlay').forEach(el => {
+                    el.classList.remove('active');
+                });
+            }
+            
+            showHowToPlay() {
+                this.showOverlay('howToPlayScreen');
+            }
+            
+            showSettings() {
+                this.showOverlay('settingsScreen');
+            }
+            
+            showLevelSelect() {
+                const grid = document.getElementById('levelGrid');
+                grid.innerHTML = '';
+                
+                for (let i = 1; i <= 10; i++) {
+                    const btn = document.createElement('button');
+                    btn.className = 'level-btn';
+                    btn.textContent = i;
+                    
+                    if (i <= this.progress.levelsUnlocked) {
+                        btn.onclick = () => this.startGame(i);
+                        btn.classList.add('completed');
+                    } else {
+                        btn.classList.add('locked');
+                        btn.textContent = '🔒';
+                    }
+                    
+                    grid.appendChild(btn);
+                }
+                
+                this.showOverlay('levelSelectScreen');
+            }
+            
+            showAchievements() {
+                const list = document.getElementById('achievementsList');
+                
+                const stats = `
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-value">${this.progress.totalGoals}</div>
+                            <div class="stat-label">Goals Scored</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">${this.progress.totalSaves}</div>
+                            <div class="stat-label">Saves Made</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">${this.progress.totalMatches}</div>
+                            <div class="stat-label">Matches Played</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">${this.progress.highScore}</div>
+                            <div class="stat-label">High Score</div>
+                        </div>
+                    </div>
+                `;
+                
+                const achievements = [
+                    { id: 'firstGoal', icon: '⚽', title: 'FIRST GOAL', desc: 'Score your first goal' },
+                    { id: 'firstSave', icon: '🧤', title: 'FIRST SAVE', desc: 'Make your first save' },
+                    { id: 'firstWin', icon: '🏆', title: 'FIRST VICTORY', desc: 'Win your first match' },
+                    { id: 'perfectShot', icon: '🎯', title: 'SNIPER', desc: 'Score a top corner goal' },
+                    { id: 'perfectSave', icon: '💪', title: 'SUPER SAVE', desc: 'Make a spectacular diving save' },
+                    { id: 'hatTrick', icon: '⭐', title: 'HAT-TRICK', desc: 'Score 3+ goals in a match' },
+                    { id: 'cleanSheet', icon: '🛡️', title: 'CLEAN SHEET', desc: 'Win without conceding' },
+                    { id: 'level5', icon: '🔥', title: 'RISING STAR', desc: 'Beat level 5' },
+                    { id: 'level10', icon: '👑', title: 'CHAMPION', desc: 'Beat level 10' },
+                    { id: 'striker100', icon: '💯', title: 'STRIKER LEGEND', desc: 'Score 100 total goals' }
+                ];
+                
+                const achievementsHTML = achievements.map(ach => `
+                    <div class="achievement ${this.progress.achievements[ach.id] ? 'unlocked' : ''}">
+                        <div class="achievement-icon">${ach.icon}</div>
+                        <div class="achievement-info">
+                            <div class="achievement-title">${ach.title}</div>
+                            <div class="achievement-desc">${ach.desc}</div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                list.innerHTML = stats + achievementsHTML;
+                this.showOverlay('achievementsScreen');
+            }
+            
+            toggleMute() {
+                this.settings.muted = this.audio.toggleMute();
+                this.saveSettings();
+            }
+            
+            setMusicVolume(val) {
+                this.settings.musicVol = parseInt(val);
+                this.audio.setMusicVolume(val);
+                this.saveSettings();
+            }
+            
+            setSFXVolume(val) {
+                this.settings.sfxVol = parseInt(val);
+                this.audio.setSFXVolume(val);
+                this.saveSettings();
+            }
+            
+            toggleReducedMotion() {
+                this.settings.reducedMotion = !this.settings.reducedMotion;
+                this.saveSettings();
+            }
+            
+            toggleParticles() {
+                this.settings.particles = !this.settings.particles;
+                this.saveSettings();
+            }
+            
+            toggleScreenShake() {
+                this.settings.screenShake = !this.settings.screenShake;
+                this.saveSettings();
+            }
+            
+            resetProgress() {
+                if (confirm('Are you sure you want to reset all progress? This cannot be undone!')) {
+                    localStorage.removeItem('strikerArenaProgress');
+                    location.reload();
+                }
+            }
+        }
+
+        // ============================================================================
+        // START
+        // ============================================================================
+        
+        const game = new Game();
+    </script>
+</body>
+</html>
