@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Epoch Drifter · seed forge</title>
+    <style>
+        /* ---------------------------------------------
+           GLOBAL & UI OVERLAY – responsive, glassmorphic 
+        --------------------------------------------- */
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            touch-action: pan-x pan-y; 
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0c0e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+        }
+        .game-container {
+            position: relative;
+            width: min(100vw, 100vh * 1.333);
+            aspect-ratio: 4 / 3;
+            max-width: 1000px;
+            box-shadow: 0 0 30px rgba(0,255,255,0.3);
+            border-radius: 20px;
+            background: #000;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            border-radius: 20px;
+            pointer-events: auto;
+        }
+        /* UI screens – hidden by default */
+        .ui-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(8, 20, 28, 0.85);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            color: #b3f0ff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 20px;
+            z-index: 10;
+            padding: 1.5rem;
+            text-shadow: 0 0 8px cyan;
+            border: 2px solid rgba(0, 255, 255, 0.4);
+            transition: opacity 0.25s ease;
+            overflow-y: auto;
+            font-size: clamp(0.8rem, 3vw, 1rem);
+        }
+        .hidden { display: none; }
+        .ui-title { font-size: 2.2em; letter-spacing: 6px; color: #fff6b3; text-shadow: 0 0 15px #ffaa00; }
+        .btn {
+            background: rgba(0, 200, 255, 0.2);
+            border: 2px solid #0cf;
+            color: #eef9ff;
+            padding: 12px 28px;
+            margin: 10px;
+            font-weight: bold;
+            border-radius: 40px;
+            font-size: 1.1em;
+            backdrop-filter: blur(3px);
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 0 15px #00aaff80;
+            width: 200px;
+            text-align: center;
+        }
+        .btn:hover { background: #0cf; color: black; box-shadow: 0 0 30px #0cf; }
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin: 20px;
+        }
+        .level-btn {
+            background: #1a2a3a;
+            border: 2px solid #3fa;
+            border-radius: 15px;
+            padding: 12px 0;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .level-btn.locked { opacity: 0.4; filter: grayscale(1); border-color: gray; }
+        .slider-container { display: flex; width: 80%; justify-content: space-between; margin: 10px; }
+        input[type=range] { width: 140px; background: #0a1a1a; accent-color: #0cf; }
+        .hud {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            justify-content: space-between;
+            color: #fff;
+            text-shadow: 2px 2px 0 #000;
+            font-size: 1.2rem;
+            z-index: 5;
+            pointer-events: none;
+            padding: 6px 16px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 40px;
+            backdrop-filter: blur(2px);
+            border: 1px solid cyan;
+        }
+        .action-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ffbb33, #ff8800);
+            border: 4px solid white;
+            box-shadow: 0 0 25px #ffaa00;
+            color: white;
+            font-size: 1.4rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .action-btn.pressed { transform: scale(0.8); background: #ff5500; }
+        .joystick-pad {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 100px;
+            height: 100px;
+            background: rgba(20,20,40,0.6);
+            border-radius: 50%;
+            backdrop-filter: blur(4px);
+            border: 2px solid cyan;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: cyan;
+            font-size: 1.2rem;
+            pointer-events: none;
+            z-index: 15;
+        }
+        @media (max-width: 600px) {
+            .btn { width: 160px; padding: 10px; }
+            .action-btn { width: 70px; height: 70px; bottom: 15px; right: 15px; }
+            .joystick-pad { width: 80px; height: 80px; bottom: 15px; left: 15px; }
+        }
+        a, .tip { color: #9efff0; }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- main canvas for gameplay -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- ACTION BUTTON (mobile/desktop ability) -->
+        <div id="actionButton" class="action-btn">⚡</div>
+        <div class="joystick-pad" id="joystickHint">⌕ drag</div>
+
+        <!-- HUD (in-game overlay) -->
+        <div id="hud" class="hud hidden">
+            <span>🔰 Lv <span id="levelDisplay">1</span></span>
+            <span>⭐ <span id="scoreDisplay">0</span>  🔥x<span id="comboDisplay">1</span></span>
+            <span>❤️ <span id="healthDisplay">3</span></span>
+            <span>🎯 <span id="objectiveDisplay">0/10</span></span>
+        </div>
+
+        <!-- UI SCREENS ================================= -->
+        <!-- TITLE SCREEN -->
+        <div id="titleScreen" class="ui-screen">
+            <div class="ui-title" id="gameTitle">⚡ EPOCH DRIFTER</div>
+            <div style="margin: 15px; font-size:1.3rem;" id="themeSubtitle">Neon Abyss · Dash</div>
+            <div class="btn" id="playBtn">▶ PLAY</div>
+            <div class="btn" id="continueBtn">⏵ CONTINUE</div>
+            <div class="btn" id="howToBtn">❓ HOW TO PLAY</div>
+            <div class="btn" id="settingsBtn">⚙ SETTINGS</div>
+            <div class="btn" id="levelSelectBtn">🗺 LEVEL SELECT</div>
+            <a class="btn" href="../index.html">Main Menu</a>
+            <div style="margin-top:20px; color:#8ad4ff; font-size:0.9rem;" id="seedDisplay">seed: 2025-03-15</div>
+            <div style="color:#aaffdd; font-size:0.8rem;">~ drift & deliver ~</div>
+        </div>
+
+        <!-- HOW TO PLAY -->
+        <div id="howToScreen" class="ui-screen hidden">
+            <h2 style="color:#fee440;">⚡ HOW TO DRIFT</h2>
+            <p style="max-width:90%;">▸ DESKTOP: WASD / arrows to move. SPACE = ability.</p>
+            <p>▸ MOBILE: drag on canvas → move. TAP ⚡ button = ability.</p>
+            <p>▸ collect ⚡ cores, avoid red enemies. Combo = back‑to‑back collects.</p>
+            <p>▸ each level has a goal: collect, survive, or deliver.</p>
+            <p>▸ DELIVERY: bring blue cores to green zone.</p>
+            <p>▸ SURVIVE: stay alive until timer runs out.</p>
+            <p>▸ ability changes every day (dash / slow / ricochet).</p>
+            <p>▸ ESC = pause, R = restart. screen shake = ouch!</p>
+            <div class="btn" id="howBackBtn">← BACK</div>
+        </div>
+
+        <!-- SETTINGS SCREEN -->
+        <div id="settingsScreen" class="ui-screen hidden">
+            <h2 style="color:#90f0ff;">⚙ CONFIG</h2>
+            <div class="slider-container">🔊 MASTER <input type="range" id="masterVol" min="0" max="1" step="0.05" value="0.7"></div>
+            <div class="slider-container">🎵 MUSIC <input type="range" id="musicVol" min="0" max="1" step="0.05" value="0.5"></div>
+            <div class="slider-container">💥 SFX <input type="range" id="sfxVol" min="0" max="1" step="0.05" value="0.7"></div>
+            <div style="display:flex; gap:25px; margin:15px;">
+                <span>🔇 MUTE <input type="checkbox" id="muteToggle"></span>
+                <span>🌈 HIGH CONTRAST <input type="checkbox" id="highContrastToggle"></span>
+                <span>🕊️ REDUCED MOTION <input type="checkbox" id="reducedMotion"></span>
+            </div>
+            <div class="btn" id="settingsBackBtn">← SAVE & BACK</div>
+        </div>
+
+        <!-- LEVEL SELECT -->
+        <div id="levelSelectScreen" class="ui-screen hidden">
+            <h2 style="color:#8affc9;">🗺️ LEVELS</h2>
+            <div id="levelGridContainer" class="level-grid"></div>
+            <div class="btn" id="levelBackBtn">← BACK</div>
+        </div>
+
+        <!-- END SCREEN (win/lose) -->
+        <div id="endScreen" class="ui-screen hidden">
+            <h1 id="endTitle" style="font-size:3rem;">🏆 VICTORY</h1>
+            <div id="endStats" style="margin:25px; font-size:1.2rem;"></div>
+            <div class="btn" id="nextLevelBtn">⏩ NEXT LEVEL</div>
+            <div class="btn" id="retryLevelBtn">🔄 RETRY</div>
+            <div class="btn" id="endToLevelBtn">🗺 LEVEL SELECT</div>
+            <div class="btn" id="endToTitleBtn">🏠 TITLE</div>
+        </div>
+
+        <!-- PAUSE SCREEN (simple) -->
+        <div id="pauseScreen" class="ui-screen hidden">
+            <h1 style="font-size:3rem; color:#ffe45c;">⏸ PAUSED</h1>
+            <div class="btn" id="resumeBtn">▶ RESUME</div>
+            <div class="btn" id="pauseRestartBtn">🔄 RESTART</div>
+            <div class="btn" id="pauseSettingsBtn">⚙ SETTINGS</div>
+            <div class="btn" id="pauseQuitBtn">🏠 QUIT</div>
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            "use strict";
+
+            // --------------------------------------------------------------
+            // 0.  DETERMINISTIC PRNG from DATE SEED
+            // --------------------------------------------------------------
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth()+1).padStart(2,'0');
+            const day = String(today.getDate()).padStart(2,'0');
+            const dateString = `${year}-${month}-${day}`;
+            let seed = (year * 367 + (month.charCodeAt(0)*11) + (day.charCodeAt(1)*7)) >>> 0;  // simple int seed
+            function seededRandom() {
+                seed = (seed * 16807) % 2147483647;
+                return (seed - 1) / 2147483646;
+            }
+
+            // --------------------------------------------------------------
+            // 1.  THEME & MECHANICS PICKER (based on seed)
+            // --------------------------------------------------------------
+            const themeList = ["🌊 NEON ABYSS", "🌲 FOREST SPIRITS", "🛸 COSMIC JUNKYARD", "⚙️ CLOCKWORK TEMPLE", "💎 CRYSTAL CAVERN"];
+            const abilityList = ["DASH", "TIME SLOW", "RICOCHET"];
+            const objectiveList = ["COLLECT", "SURVIVE", "DELIVER"];
+            const enemyBehaviorList = ["HOMING", "PATTERN", "BOUNCY"];
+
+            // pick using seed (deterministic)
+            const themeIdx = Math.floor(seededRandom() * themeList.length);
+            const abilityIdx = Math.floor(seededRandom() * abilityList.length);
+            const objectiveIdx = Math.floor(seededRandom() * objectiveList.length);
+            const enemyIdx = Math.floor(seededRandom() * enemyBehaviorList.length);
+
+            const THEME = themeList[themeIdx];
+            const ABILITY = abilityList[abilityIdx];
+            const OBJECTIVE = objectiveList[objectiveIdx];
+            const ENEMY_BEHAVIOR = enemyBehaviorList[enemyIdx];
+
+            // reset seed for deterministic level gen (but we fix levels anyway)
+            // we re-seed for stable config
+            seed = (year * 367 + (month.charCodeAt(0)*11) + (day.charCodeAt(1)*7)) >>> 0;
+            for(let i=0;i<5;i++) seededRandom(); // shuffle once
+
+            // theme specific colors (later used in draw)
+            let accentColor = "#0cf", bgColor = "#0a0c12", playerColor = "#a0f0ff";
+            // will be set in drawing
+
+            // --------------------------------------------------------------
+            // 2.  LOCALSTORAGE MANAGER
+            // --------------------------------------------------------------
+            const STORAGE_KEY = "epoch_drifter_save";
+            let saveData = {
+                unlockedLevel: 1,
+                bestScores: [0,0,0,0,0,0,0,0,0,0],
+                achievements: { collected:0, usedAbility:0, combo50:false, beatBoss:false },
+                settings: { masterVol:0.7, musicVol:0.5, sfxVol:0.7, mute:false, highContrast:false, reducedMotion:false },
+                unlockedSkins: ["default"]
+            };
+
+            function loadSave() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        saveData = { ...saveData, ...parsed };
+                        if (parsed.settings) saveData.settings = { ...saveData.settings, ...parsed.settings };
+                        if (parsed.achievements) saveData.achievements = { ...saveData.achievements, ...parsed.achievements };
+                    }
+                } catch(e) {}
+            }
+            function writeSave() {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+            }
+            loadSave();
+
+            // --------------------------------------------------------------
+            // 3.  AUDIO ENGINE (procedural webaudio)
+            // --------------------------------------------------------------
+            let audioCtx = null;
+            let masterGain, musicGain, sfxGain;
+            let bgmLoopNode = null;
+            let bgmPlaying = false;
+            function initAudio() {
+                if (audioCtx) return;
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioCtx.createGain();
+                musicGain = audioCtx.createGain();
+                sfxGain = audioCtx.createGain();
+                masterGain.gain.value = saveData.settings.mute ? 0 : saveData.settings.masterVol;
+                musicGain.gain.value = saveData.settings.musicVol;
+                sfxGain.gain.value = saveData.settings.sfxVol;
+                masterGain.connect(audioCtx.destination);
+                musicGain.connect(masterGain);
+                sfxGain.connect(masterGain);
+            }
+
+            function playSfx(type, pitch=440) {
+                if (!audioCtx || saveData.settings.mute) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = pitch;
+                gain.gain.value = 0.2 * saveData.settings.sfxVol;
+                osc.connect(gain);
+                gain.connect(sfxGain);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+            }
+
+            function startBGM() {
+                if (!audioCtx || bgmPlaying || saveData.settings.mute) return;
+                if (bgmLoopNode) bgmLoopNode.stop();
+                bgmPlaying = true;
+                const now = audioCtx.currentTime;
+                const loopLength = 4; // seconds
+                // simple arpeggio
+                const baseFreq = 220;
+                const pattern = [1, 1.25, 1.5, 2.0];
+                let time = now;
+                for (let i=0; i<16; i++) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = baseFreq * pattern[i%4] * (1 + (i%3)*0.1);
+                    gain.gain.value = 0.07 * saveData.settings.musicVol;
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.5);
+                    osc.connect(gain);
+                    gain.connect(musicGain);
+                    osc.start(time);
+                    osc.stop(time + 0.5);
+                    time += 0.25;
+                }
+                // schedule next loop
+                bgmLoopNode = setTimeout(() => { startBGM(); }, loopLength * 1000);
+            }
+
+            function stopBGM() {
+                if (bgmLoopNode) clearTimeout(bgmLoopNode);
+                bgmLoopNode = null;
+                bgmPlaying = false;
+            }
+
+            // --------------------------------------------------------------
+            // 4.  GAME STATE & ENTITIES
+            // --------------------------------------------------------------
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            let gameState = 'title'; // title, game, paused, end, etc
+            let width, height, w, h;
+
+            // player
+            let player = {
+                x: 400, y: 300, vx:0, vy:0, radius:16, health:3, maxHealth:3,
+                invincible:0, dashCooldown:0, slowTimer:0, ricochetAmmo:0
+            };
+
+            // level data
+            let currentLevel = 1;
+            let levelProgress = {
+                coresCollected:0, coresTarget:10, survivedTime:0, surviveTarget:30,
+                delivered:0, deliverTarget:5, carriedCores:0,
+                enemiesKilled:0, score:0, combo:1, comboTimer:0
+            };
+            let enemies = [];
+            let collectibles = [];
+            let bullets = [];
+            let particles = [];
+            let deliveryZone = null;
+            let gameTimer = 0;
+            let gameWinFlag = false, gameLoseFlag = false;
+            let shakeAmount = 0;
+
+            // level definitions (10 levels, progressive)
+            const levelDefs = [
+                { goal:0, goalVal:5, enemyCount:2, enemySpeed:1.2, spawnRate:0.8, boss:false },
+                { goal:0, goalVal:8, enemyCount:3, enemySpeed:1.4, spawnRate:0.9, boss:false },
+                { goal:0, goalVal:12, enemyCount:4, enemySpeed:1.6, spawnRate:1.0, boss:false },
+                { goal:1, goalVal:20, enemyCount:4, enemySpeed:1.8, spawnRate:1.2, boss:false }, // survive 20 sec
+                { goal:2, goalVal:4, enemyCount:5, enemySpeed:1.9, spawnRate:1.3, boss:false }, // deliver 4
+                { goal:0, goalVal:15, enemyCount:5, enemySpeed:2.0, spawnRate:1.5, boss:false },
+                { goal:1, goalVal:25, enemyCount:6, enemySpeed:2.2, spawnRate:1.6, boss:false },
+                { goal:2, goalVal:6, enemyCount:7, enemySpeed:2.3, spawnRate:1.7, boss:false },
+                { goal:0, goalVal:20, enemyCount:8, enemySpeed:2.5, spawnRate:1.8, boss:false },
+                { goal:0, goalVal:30, enemyCount:10, enemySpeed:2.8, spawnRate:2.0, boss:true }  // boss level
+            ];
+
+            // reset level based on currentLevel index
+            function resetLevel(levelNum) {
+                const def = levelDefs[levelNum-1];
+                player = { x: width/2, y: height/2, vx:0, vy:0, radius:16, health:3, maxHealth:3,
+                    invincible:0, dashCooldown:0, slowTimer:0, ricochetAmmo: ABILITY==='RICOCHET'?3:0 };
+                enemies = [];
+                collectibles = [];
+                bullets = [];
+                particles = [];
+                deliveryZone = null;
+                gameTimer = 0;
+                gameWinFlag = false; gameLoseFlag = false;
+                levelProgress = {
+                    coresCollected:0, coresTarget: def.goalVal,
+                    survivedTime:0, surviveTarget: def.goalVal,
+                    delivered:0, deliverTarget: def.goalVal,
+                    carriedCores:0, enemiesKilled:0, score:0, combo:1, comboTimer:0
+                };
+                if (def.goal === 2) {  // delivery
+                    deliveryZone = { x: width*0.8, y: height*0.8, radius: 40 };
+                }
+                // spawn initial enemies
+                for (let i=0;i<def.enemyCount;i++) {
+                    enemies.push(createEnemy(def.enemySpeed));
+                }
+                // initial collectibles
+                for (let i=0;i<5;i++) spawnCollectible();
+                // set objective text
+                updateHUD();
+            }
+
+            function createEnemy(speed=1.5) {
+                let x = Math.random() * width;
+                let y = Math.random() * height;
+                let type = ENEMY_BEHAVIOR;
+                return { x, y, vx: (Math.random()-0.5)*speed, vy: (Math.random()-0.5)*speed, radius: 15, speed, type, hp:1 };
+            }
+
+            function spawnCollectible() {
+                if (collectibles.length < 30) {
+                    collectibles.push({ x: Math.random() * width, y: Math.random() * height, radius: 8 });
+                }
+            }
+
+            // --------------------------------------------------------------
+            // 5.  INPUT HANDLER (keyboard + touch/drag)
+            // --------------------------------------------------------------
+            let moveTarget = { x: width/2, y: height/2 };
+            let keys = { up:false, down:false, left:false, right:false, space:false };
+            let actionPressed = false;
+
+            function handleKey(e, value) {
+                switch(e.key) {
+                    case 'ArrowUp': case 'w': keys.up = value; e.preventDefault(); break;
+                    case 'ArrowDown': case 's': keys.down = value; e.preventDefault(); break;
+                    case 'ArrowLeft': case 'a': keys.left = value; e.preventDefault(); break;
+                    case 'ArrowRight': case 'd': keys.right = value; e.preventDefault(); break;
+                    case ' ': keys.space = value; e.preventDefault(); break;
+                    case 'Escape': if (value && gameState==='game') pauseGame(); else if (value && gameState==='paused') resumeGame(); e.preventDefault(); break;
+                    case 'r': case 'R': if(value && gameState==='game') resetLevel(currentLevel); e.preventDefault(); break;
+                }
+            }
+            window.addEventListener('keydown', e => handleKey(e, true));
+            window.addEventListener('keyup', e => handleKey(e, false));
+
+            // touch / drag movement
+            let isDragging = false;
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); isDragging = true; updateMoveTarget(e); });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); updateMoveTarget(e); });
+            canvas.addEventListener('touchend', (e) => { e.preventDefault(); isDragging = false; });
+            canvas.addEventListener('mousedown', (e) => { isDragging = true; updateMoveTarget(e); });
+            canvas.addEventListener('mousemove', (e) => { if (isDragging) updateMoveTarget(e); });
+            canvas.addEventListener('mouseup', () => { isDragging = false; });
+            canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+            function updateMoveTarget(e) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                moveTarget.x = (clientX - rect.left) * scaleX;
+                moveTarget.y = (clientY - rect.top) * scaleY;
+                moveTarget.x = Math.min(width-20, Math.max(20, moveTarget.x));
+                moveTarget.y = Math.min(height-20, Math.max(20, moveTarget.y));
+            }
+
+            // action button (ability)
+            document.getElementById('actionButton').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (gameState === 'game') useAbility();
+            });
+            // also keyboard space triggers ability
+            // keyboard space handled in update loop via keys.space
+
+            // --------------------------------------------------------------
+            // 6.  GAME MECHANICS (ability, collisions, objectives)
+            // --------------------------------------------------------------
+            function useAbility() {
+                if (gameState !== 'game' || gameWinFlag || gameLoseFlag) return;
+                if (ABILITY === 'DASH') {
+                    if (player.dashCooldown <= 0) {
+                        let angle = Math.atan2(player.vy, player.vx) || 0;
+                        if (Math.hypot(player.vx, player.vy) < 0.1) angle = (keys.right?0: keys.left?Math.PI: keys.down?Math.PI/2: -Math.PI/2) || 0;
+                        player.vx += Math.cos(angle) * 18;
+                        player.vy += Math.sin(angle) * 18;
+                        player.invincible = 0.5;
+                        player.dashCooldown = 1.5;
+                        playSfx('dash', 660);
+                        addShake(8);
+                        saveData.achievements.usedAbility++;
+                    }
+                }
+                else if (ABILITY === 'TIME SLOW') {
+                    if (player.slowTimer <= 0) {
+                        player.slowTimer = 3.0; // 3 seconds
+                        playSfx('slow', 220);
+                    }
+                }
+                else if (ABILITY === 'RICOCHET') {
+                    if (player.ricochetAmmo > 0) {
+                        let angle = Math.atan2(moveTarget.y - player.y, moveTarget.x - player.x);
+                        bullets.push({
+                            x: player.x, y: player.y, vx: Math.cos(angle)*7, vy: Math.sin(angle)*7,
+                            radius: 6, life: 3, bounces: 3
+                        });
+                        player.ricochetAmmo--;
+                        playSfx('ricochet', 880);
+                    }
+                }
+            }
+
+            function addShake(intensity) { if (!saveData.settings.reducedMotion) shakeAmount = intensity; }
+
+            // update per frame
+            function updateGame(dt) {
+                if (gameWinFlag || gameLoseFlag) return;
+                const def = levelDefs[currentLevel-1];
+                // player movement
+                let targetX = moveTarget.x, targetY = moveTarget.y;
+                if (!isDragging) {
+                    // keyboard fallback
+                    targetX = player.x + (keys.right?250: keys.left?-250:0) * dt;
+                    targetY = player.y + (keys.down?250: keys.up?-250:0) * dt;
+                    targetX = Math.min(width-20, Math.max(20, targetX));
+                    targetY = Math.min(height-20, Math.max(20, targetY));
+                }
+                // smooth move
+                player.vx += (targetX - player.x) * 8 * dt;
+                player.vy += (targetY - player.y) * 8 * dt;
+                player.vx *= 0.85; player.vy *= 0.85;
+                player.x += player.vx * dt * 60;
+                player.y += player.vy * dt * 60;
+                player.x = Math.min(width-16, Math.max(16, player.x));
+                player.y = Math.min(height-16, Math.max(16, player.y));
+
+                // cooldowns
+                player.dashCooldown = Math.max(0, player.dashCooldown - dt);
+                player.slowTimer = Math.max(0, player.slowTimer - dt);
+                player.invincible = Math.max(0, player.invincible - dt);
+                // combo decay
+                if (levelProgress.comboTimer > 0) levelProgress.comboTimer -= dt; else levelProgress.combo = 1;
+
+                // enemy behavior
+                const enemySpeedMul = player.slowTimer>0 ? 0.3 : 1.0;
+                for (let e of enemies) {
+                    if (ENEMY_BEHAVIOR === 'HOMING') {
+                        let dx = player.x - e.x, dy = player.y - e.y;
+                        let len = Math.hypot(dx, dy);
+                        if (len > 0) { dx /= len; dy /= len; }
+                        e.vx += dx * 0.2 * enemySpeedMul; e.vy += dy * 0.2 * enemySpeedMul;
+                        e.vx = Math.min(def.enemySpeed, Math.max(-def.enemySpeed, e.vx));
+                        e.vy = Math.min(def.enemySpeed, Math.max(-def.enemySpeed, e.vy));
+                    } else if (ENEMY_BEHAVIOR === 'PATTERN') {
+                        e.vx = Math.sin(gameTimer * 2 + e.x) * 1.2 * enemySpeedMul;
+                        e.vy = Math.cos(gameTimer * 1.7 + e.y) * 1.2 * enemySpeedMul;
+                    } else if (ENEMY_BEHAVIOR === 'BOUNCY') {
+                        // nothing, just bounce off walls
+                    }
+                    e.x += e.vx * dt * 60 * enemySpeedMul;
+                    e.y += e.vy * dt * 60 * enemySpeedMul;
+                    // wall bounce
+                    if (e.x < 15) { e.x = 15; e.vx *= -0.8; }
+                    if (e.x > width-15) { e.x = width-15; e.vx *= -0.8; }
+                    if (e.y < 15) { e.y = 15; e.vy *= -0.8; }
+                    if (e.y > height-15) { e.y = height-15; e.vy *= -0.8; }
+                }
+
+                // bullets ricochet
+                for (let i=bullets.length-1;i>=0;i--) {
+                    let b = bullets[i];
+                    b.x += b.vx * dt * 60;
+                    b.y += b.vy * dt * 60;
+                    b.life -= dt;
+                    if (b.x < 10 || b.x > width-10) { b.vx *= -0.9; b.bounces--; b.x = Math.min(width-10, Math.max(10,b.x)); }
+                    if (b.y < 10 || b.y > height-10) { b.vy *= -0.9; b.bounces--; b.y = Math.min(height-10, Math.max(10,b.y)); }
+                    if (b.bounces <=0 || b.life <=0) { bullets.splice(i,1); continue; }
+                    // enemy collision
+                    for (let j=enemies.length-1;j>=0;j--) {
+                        let e = enemies[j];
+                        if (Math.hypot(b.x-e.x, b.y-e.y) < e.radius+5) {
+                            enemies.splice(j,1);
+                            bullets.splice(i,1);
+                            levelProgress.enemiesKilled++;
+                            levelProgress.score += 100 * levelProgress.combo;
+                            addShake(4);
+                            playSfx('hit', 520);
+                            spawnParticles(e.x, e.y);
+                            break;
+                        }
+                    }
+                }
+
+                // collectibles
+                for (let i=collectibles.length-1;i>=0;i--) {
+                    let c = collectibles[i];
+                    if (Math.hypot(player.x-c.x, player.y-c.y) < player.radius+5) {
+                        if (OBJECTIVE === 'DELIVER') { levelProgress.carriedCores++; }
+                        else { levelProgress.coresCollected++; }
+                        levelProgress.score += 50 * levelProgress.combo;
+                        levelProgress.combo++;
+                        levelProgress.comboTimer = 1.5;
+                        playSfx('collect', 880);
+                        spawnParticles(c.x, c.y, '#ffd966');
+                        collectibles.splice(i,1);
+                        spawnCollectible();
+                    }
+                }
+
+                // delivery zone
+                if (deliveryZone && OBJECTIVE === 'DELIVER') {
+                    if (Math.hypot(player.x-deliveryZone.x, player.y-deliveryZone.y) < deliveryZone.radius+player.radius) {
+                        if (levelProgress.carriedCores > 0) {
+                            levelProgress.delivered += levelProgress.carriedCores;
+                            levelProgress.score += 200 * levelProgress.carriedCores * levelProgress.combo;
+                            levelProgress.carriedCores = 0;
+                            playSfx('deliver', 320);
+                        }
+                    }
+                }
+
+                // player-enemy collision
+                for (let e of enemies) {
+                    if (player.invincible <= 0 && Math.hypot(player.x-e.x, player.y-e.y) < player.radius+e.radius) {
+                        player.health--;
+                        player.invincible = 1.2;
+                        addShake(12);
+                        playSfx('playerhit', 180);
+                        if (player.health <= 0) { gameLoseFlag = true; gameState = 'end'; showEndScreen(false); }
+                        // knockback
+                        let dx = player.x - e.x, dy = player.y - e.y;
+                        if (dx===0 && dy===0) dx=1;
+                        let len = Math.hypot(dx,dy);
+                        player.x += dx/len * 40; player.y += dy/len * 40;
+                    }
+                }
+
+                // spawn collectible regularly
+                if (Math.random() < def.spawnRate * dt * 2) spawnCollectible();
+
+                // objective progress
+                if (def.goal === 1) { // survive
+                    levelProgress.survivedTime += dt;
+                    if (levelProgress.survivedTime >= def.goalVal) gameWinFlag = true;
+                } else if (def.goal === 0) { // collect
+                    if (levelProgress.coresCollected >= def.goalVal) gameWinFlag = true;
+                } else if (def.goal === 2) { // deliver
+                    if (levelProgress.delivered >= def.goalVal) gameWinFlag = true;
+                }
+
+                if (gameWinFlag) {
+                    gameState = 'end';
+                    if (currentLevel === 10) saveData.achievements.beatBoss = true;
+                    if (currentLevel >= saveData.unlockedLevel) saveData.unlockedLevel = Math.min(10, currentLevel+1);
+                    if (levelProgress.score > saveData.bestScores[currentLevel-1]) saveData.bestScores[currentLevel-1] = levelProgress.score;
+                    writeSave();
+                    showEndScreen(true);
+                }
+                if (gameLoseFlag) { gameState = 'end'; showEndScreen(false); }
+
+                // particles update
+                for (let i=particles.length-1;i>=0;i--) {
+                    let p = particles[i];
+                    p.x += p.vx * dt * 60; p.y += p.vy * dt * 60;
+                    p.life -= dt;
+                    if (p.life <=0) particles.splice(i,1);
+                }
+                gameTimer += dt;
+                updateHUD();
+            }
+
+            function spawnParticles(x,y, col='#ffaa88') {
+                for (let i=0;i<8;i++) {
+                    particles.push({
+                        x, y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5,
+                        life: 0.6, color: col, size: 4
+                    });
+                }
+            }
+
+            function updateHUD() {
+                document.getElementById('levelDisplay').innerText = currentLevel;
+                document.getElementById('scoreDisplay').innerText = Math.floor(levelProgress.score);
+                document.getElementById('comboDisplay').innerText = levelProgress.combo;
+                document.getElementById('healthDisplay').innerText = player.health;
+                let objTxt = '';
+                const def = levelDefs[currentLevel-1];
+                if (def.goal === 0) objTxt = `${levelProgress.coresCollected}/${def.goalVal}`;
+                else if (def.goal === 1) objTxt = `${Math.floor(levelProgress.survivedTime)}/${def.goalVal}s`;
+                else objTxt = `${levelProgress.delivered}/${def.goalVal}`;
+                document.getElementById('objectiveDisplay').innerText = objTxt;
+            }
+
+            // --------------------------------------------------------------
+            // 7.  DRAWING (canvas, particles, screen shake, HUD)
+            // --------------------------------------------------------------
+            function draw() {
+                ctx.clearRect(0,0,width,height);
+                // background
+                ctx.fillStyle = saveData.settings.highContrast ? '#101520' : '#0c1c2a';
+                ctx.fillRect(0,0,width,height);
+                // draw stars
+                ctx.fillStyle = '#cceeff';
+                for (let i=0;i<50;i++) {
+                    if (i%2===0) ctx.fillRect((i*17)%width, (i*9)%height, 2,2);
+                }
+                // delivery zone
+                if (deliveryZone) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#4aff7a'; ctx.lineWidth = 3;
+                    ctx.arc(deliveryZone.x, deliveryZone.y, deliveryZone.radius, 0, 2 * Math.PI);
+                    ctx.strokeStyle = '#aaffaa'; ctx.setLineDash([6,8]); ctx.stroke(); ctx.setLineDash([]);
+                }
+                // collectibles
+                ctx.shadowBlur = 12; ctx.shadowColor = '#ffd966';
+                for (let c of collectibles) {
+                    ctx.fillStyle = OBJECTIVE==='DELIVER'?'#64ffda':'#ffd966';
+                    ctx.beginPath(); ctx.arc(c.x, c.y, 8, 0, 2*Math.PI); ctx.fill();
+                }
+                // enemies
+                ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = 14;
+                for (let e of enemies) {
+                    ctx.fillStyle = saveData.settings.highContrast?'#ff3300':'#ff6b6b';
+                    ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, 2*Math.PI); ctx.fill();
+                }
+                // bullets
+                ctx.shadowBlur = 10; ctx.fillStyle = '#ffd966';
+                for (let b of bullets) {
+                    ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, 2*Math.PI); ctx.fill();
+                }
+                // player
+                ctx.shadowBlur = 20; ctx.shadowColor = player.invincible>0?'#aaa':'#00ffff';
+                ctx.fillStyle = playerColor; 
+                ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, 2*Math.PI); ctx.fill();
+                // carried cores
+                if (levelProgress.carriedCores > 0) {
+                    ctx.fillStyle = '#f0e68c'; ctx.font = 'bold 20px monospace'; ctx.fillText(`+${levelProgress.carriedCores}`, player.x-20, player.y-35);
+                }
+                // particles
+                ctx.shadowBlur = 8;
+                for (let p of particles) {
+                    ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 2*Math.PI); ctx.fill();
+                }
+                ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+                // screen shake
+                if (shakeAmount > 0) {
+                    ctx.translate((Math.random()-0.5)*shakeAmount, (Math.random()-0.5)*shakeAmount);
+                    shakeAmount *= 0.8;
+                }
+            }
+
+            // --------------------------------------------------------------
+            // 8.  UI SCREEN LOGIC
+            // --------------------------------------------------------------
+            function showScreen(screenId) {
+                document.querySelectorAll('.ui-screen').forEach(s => s.classList.add('hidden'));
+                document.getElementById(screenId).classList.remove('hidden');
+                if (screenId === 'titleScreen') {
+                    document.getElementById('gameTitle').innerText = THEME + ' · ' + ABILITY;
+                    document.getElementById('seedDisplay').innerText = `seed: ${dateString} · ${OBJECTIVE} / ${ENEMY_BEHAVIOR}`;
+                }
+            }
+
+            function pauseGame() { if (gameState==='game') { gameState='paused'; showScreen('pauseScreen'); } }
+            function resumeGame() { gameState='game'; showScreen('game'); document.getElementById('hud').classList.remove('hidden'); }
+            function showEndScreen(win) {
+                document.getElementById('hud').classList.add('hidden');
+                document.getElementById('endTitle').innerText = win ? '✨ VICTORY ✨' : '💀 DEFEAT 💀';
+                let stats = `SCORE: ${Math.floor(levelProgress.score)}  |  COMBO: x${levelProgress.combo}`;
+                document.getElementById('endStats').innerText = stats;
+                showScreen('endScreen');
+            }
+
+            // level select populate
+            function refreshLevelGrid() {
+                let container = document.getElementById('levelGridContainer');
+                container.innerHTML = '';
+                for (let i=1;i<=10;i++) {
+                    let btn = document.createElement('div');
+                    btn.classList.add('level-btn');
+                    if (i > saveData.unlockedLevel) btn.classList.add('locked');
+                    btn.innerText = `Lv ${i}`;
+                    btn.onclick = () => {
+                        if (i <= saveData.unlockedLevel) {
+                            currentLevel = i;
+                            resetLevel(currentLevel);
+                            gameState = 'game';
+                            document.getElementById('hud').classList.remove('hidden');
+                            showScreen('game');
+                        }
+                    };
+                    container.appendChild(btn);
+                }
+            }
+
+            // --------------------------------------------------------------
+            // 9.  INITIALIZATION & EVENT LISTENERS
+            // --------------------------------------------------------------
+            function resizeCanvas() {
+                width = 800; height = 600; // fixed logical
+                canvas.width = width * (window.devicePixelRatio || 1);
+                canvas.height = height * (window.devicePixelRatio || 1);
+                ctx.setTransform(1,0,0,1,0,0);
+                ctx.scale(canvas.width/width, canvas.height/height);
+            }
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+            moveTarget = { x: width/2, y: height/2 };
+
+            // hook UI buttons
+            document.getElementById('playBtn').addEventListener('click', ()=>{
+                currentLevel = 1; resetLevel(1); gameState='game'; showScreen('game'); document.getElementById('hud').classList.remove('hidden');
+                if (!audioCtx) { initAudio(); startBGM(); } else if (audioCtx.state==='suspended') audioCtx.resume();
+            });
+            document.getElementById('continueBtn').addEventListener('click', ()=>{
+                currentLevel = saveData.unlockedLevel; resetLevel(currentLevel); gameState='game'; showScreen('game'); document.getElementById('hud').classList.remove('hidden');
+                if (!audioCtx) { initAudio(); startBGM(); }
+            });
+            document.getElementById('howToBtn').addEventListener('click', ()=> showScreen('howToScreen'));
+            document.getElementById('howBackBtn').addEventListener('click', ()=> showScreen('titleScreen'));
+            document.getElementById('settingsBtn').addEventListener('click', ()=> { showScreen('settingsScreen'); });
+            document.getElementById('settingsBackBtn').addEventListener('click', ()=>{
+                saveData.settings.masterVol = parseFloat(document.getElementById('masterVol').value);
+                saveData.settings.musicVol = parseFloat(document.getElementById('musicVol').value);
+                saveData.settings.sfxVol = parseFloat(document.getElementById('sfxVol').value);
+                saveData.settings.mute = document.getElementById('muteToggle').checked;
+                saveData.settings.highContrast = document.getElementById('highContrastToggle').checked;
+                saveData.settings.reducedMotion = document.getElementById('reducedMotion').checked;
+                writeSave();
+                if (masterGain) masterGain.gain.value = saveData.settings.mute ? 0 : saveData.settings.masterVol;
+                if (musicGain) musicGain.gain.value = saveData.settings.musicVol;
+                if (sfxGain) sfxGain.gain.value = saveData.settings.sfxVol;
+                showScreen('titleScreen');
+            });
+            document.getElementById('levelSelectBtn').addEventListener('click', ()=>{ refreshLevelGrid(); showScreen('levelSelectScreen'); });
+            document.getElementById('levelBackBtn').addEventListener('click', ()=> showScreen('titleScreen'));
+            document.getElementById('endToTitleBtn').addEventListener('click', ()=> showScreen('titleScreen'));
+            document.getElementById('endToLevelBtn').addEventListener('click', ()=>{ refreshLevelGrid(); showScreen('levelSelectScreen'); });
+            document.getElementById('retryLevelBtn').addEventListener('click', ()=>{ resetLevel(currentLevel); gameState='game'; showScreen('game'); document.getElementById('hud').classList.remove('hidden'); });
+            document.getElementById('nextLevelBtn').addEventListener('click', ()=>{
+                if (currentLevel < 10) currentLevel++; resetLevel(currentLevel); gameState='game'; showScreen('game'); document.getElementById('hud').classList.remove('hidden');
+            });
+            document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+            document.getElementById('pauseRestartBtn').addEventListener('click', ()=>{ resetLevel(currentLevel); gameState='game'; showScreen('game'); document.getElementById('hud').classList.remove('hidden'); });
+            document.getElementById('pauseSettingsBtn').addEventListener('click', ()=> showScreen('settingsScreen'));
+            document.getElementById('pauseQuitBtn').addEventListener('click', ()=> showScreen('titleScreen'));
+
+            // load settings to UI
+            document.getElementById('masterVol').value = saveData.settings.masterVol;
+            document.getElementById('musicVol').value = saveData.settings.musicVol;
+            document.getElementById('sfxVol').value = saveData.settings.sfxVol;
+            document.getElementById('muteToggle').checked = saveData.settings.mute;
+            document.getElementById('highContrastToggle').checked = saveData.settings.highContrast;
+            document.getElementById('reducedMotion').checked = saveData.settings.reducedMotion;
+
+            // game loop
+            let lastTime = 0;
+            function gameLoop(now) {
+                let dt = Math.min(0.016, (now - lastTime) / 1000 || 0.016);
+                if (gameState === 'game') {
+                    updateGame(dt);
+                }
+                if (gameState === 'game' || gameState === 'paused' || gameState === 'end') {
+                    draw();
+                }
+                lastTime = now;
+                requestAnimationFrame(gameLoop);
+            }
+            requestAnimationFrame(gameLoop);
+            showScreen('titleScreen');
+            // ensure canvas gets initial target
+            moveTarget.x = width/2; moveTarget.y = height/2;
+        })();
+    </script>
+</body>
+</html>
