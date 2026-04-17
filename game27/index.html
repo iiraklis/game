@@ -87,9 +87,6 @@
             text-shadow: 0 0 8px #ffbb77;
             transition: 0.2s;
             letter-spacing: 1px;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
         }
         .btn:hover {
             background: #4f356b;
@@ -127,6 +124,7 @@
     <div id="controls">
         <button class="btn" id="reset-btn">🔄 New Tale</button>
         <a class="btn" href="../index.html">Main Menu</a>
+
     </div>
 
     <script type="importmap">
@@ -233,10 +231,13 @@
             scene.add(dust);
         }
 
-        // --- CHESSBOARD ---
+        // --- CHESSBOARD (with raycast support) ---
         const boardGroup = new THREE.Group();
         const squareSize = 1.0;
         const boardColors = { light: 0xf0e0c0, dark: 0x6b4e3a };
+        
+        // Store squares for raycasting
+        const boardSquares = [];
         
         const basePlate = new THREE.Mesh(
             new THREE.BoxGeometry(9.2, 0.2, 9.2),
@@ -264,7 +265,11 @@
                 square.position.y = 0.0;
                 square.receiveShadow = true;
                 square.castShadow = false;
+                square.userData.isSquare = true;
+                square.userData.file = i;
+                square.userData.rank = j;
                 boardGroup.add(square);
+                boardSquares.push(square);
                 
                 if (!isLight) {
                     const edgeMat = new THREE.LineBasicMaterial({ color: 0xc9a87c });
@@ -452,7 +457,6 @@
                 group.add(crossHoriz);
             }
             
-            // Store metadata on the group and all children for raycasting
             group.userData.type = type;
             group.userData.color = color;
             group.traverse(obj => { obj.userData.pieceGroup = group; });
@@ -497,7 +501,6 @@
             const fromPos = getPositionFromSquare(fromSq);
             const toPos = getPositionFromSquare(toSq);
             
-            // Magic beam
             const points = [fromPos.clone().add(new THREE.Vector3(0, 0.8, 0)), toPos.clone().add(new THREE.Vector3(0, 0.8, 0))];
             const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
             const lineMat = new THREE.LineBasicMaterial({ color: 0xffaa00 });
@@ -580,7 +583,7 @@
             document.getElementById('message').innerHTML = isWhiteTurn ? '✨ White to move, noble wizard ✨' : '🌙 Black to move, dark knight 🌙';
         }
 
-        // --- RAYCASTER CLICK HANDLER (FIXED) ---
+        // --- RAYCASTER CLICK HANDLER (FIXED: now supports clicking empty squares) ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         
@@ -591,14 +594,15 @@
             mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
             
             raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(piecesGroup.children, true);
             
-            if (intersects.length > 0) {
-                // Find the piece group from hit object
-                let hit = intersects[0].object;
+            // First check pieces
+            const pieceIntersects = raycaster.intersectObjects(piecesGroup.children, true);
+            
+            if (pieceIntersects.length > 0) {
+                // Clicked on a piece
+                let hit = pieceIntersects[0].object;
                 let pieceGroup = hit.userData.pieceGroup;
                 if (!pieceGroup) {
-                    // Fallback: traverse up
                     let parent = hit.parent;
                     while (parent && !parent.userData.square) parent = parent.parent;
                     pieceGroup = parent;
@@ -610,7 +614,9 @@
                 const isCurrentTurn = (pieceColor === 'w' && isWhiteTurn) || (pieceColor === 'b' && !isWhiteTurn);
                 
                 if (selectedSquare) {
+                    // Attempt move to clicked piece square
                     if (selectedSquare === square) {
+                        // Deselect
                         selectedSquare = null;
                         selectedPieceMesh = null;
                         document.getElementById('message').innerHTML = isWhiteTurn ? '✨ White to move ✨' : '🌙 Black to move 🌙';
@@ -619,6 +625,7 @@
                     
                     const success = attemptMove(selectedSquare, square);
                     if (!success && isCurrentTurn) {
+                        // Switch selection to new piece
                         selectedSquare = square;
                         selectedPieceMesh = pieceGroup;
                         document.getElementById('message').innerHTML = `⚔️ Selected piece at ${square} ⚔️`;
@@ -634,9 +641,28 @@
                     }
                 }
             } else {
-                selectedSquare = null;
-                selectedPieceMesh = null;
-                document.getElementById('message').innerHTML = isWhiteTurn ? '✨ White to move ✨' : '🌙 Black to move 🌙';
+                // Clicked on board (empty square)
+                const boardIntersects = raycaster.intersectObjects(boardSquares);
+                if (boardIntersects.length > 0 && selectedSquare) {
+                    const hitSquare = boardIntersects[0].object;
+                    const file = hitSquare.userData.file;
+                    const rank = hitSquare.userData.rank;
+                    const targetSquare = String.fromCharCode(97 + file) + (8 - rank);
+                    
+                    // Attempt move to empty square
+                    const success = attemptMove(selectedSquare, targetSquare);
+                    if (!success) {
+                        // Invalid move, deselect
+                        selectedSquare = null;
+                        selectedPieceMesh = null;
+                        document.getElementById('message').innerHTML = isWhiteTurn ? '✨ White to move ✨' : '🌙 Black to move 🌙';
+                    }
+                } else {
+                    // Clicked empty but no piece selected, or clicked elsewhere
+                    selectedSquare = null;
+                    selectedPieceMesh = null;
+                    document.getElementById('message').innerHTML = isWhiteTurn ? '✨ White to move ✨' : '🌙 Black to move 🌙';
+                }
             }
         });
 
@@ -704,7 +730,7 @@
         addLabel('🏰', new THREE.Vector3(4.5, 1.2, 4.5), '30px');
         addLabel('⚜️ Enchanted Chess ⚜️', new THREE.Vector3(0, 2.8, 0), '24px');
 
-        console.log('✨ Enchanted Chess is ready! May friendship win! ✨');
+        console.log('✨ Enchanted Chess is ready! Click a piece, then click a square to move. ✨');
     </script>
 </body>
 </html>
