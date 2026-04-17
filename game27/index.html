@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Enchanted 3D Chess · Fairy Tale Kingdom</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            background-color: #0a0f1e;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffe9b0;
+            text-shadow: 0 0 20px #ffaa00, 0 0 40px #aa5500;
+            background: rgba(20, 15, 30, 0.6);
+            padding: 12px 24px;
+            border-radius: 60px;
+            backdrop-filter: blur(8px);
+            border: 1px solid #ffd966;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+            pointer-events: none;
+            z-index: 10;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        #turn-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #fff5e0;
+            text-shadow: 0 0 15px #7ec8ff, 0 0 30px #3a6ea5;
+            background: rgba(30, 20, 40, 0.7);
+            padding: 12px 28px;
+            border-radius: 50px;
+            backdrop-filter: blur(8px);
+            border: 1px solid #aad0ff;
+            box-shadow: 0 0 30px #3f7eb6;
+            pointer-events: none;
+            z-index: 10;
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+        #message {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #f3e3c2;
+            text-shadow: 0 0 25px #c49a6c, 0 0 40px #8b5e2e;
+            background: rgba(45, 30, 20, 0.6);
+            padding: 10px 30px;
+            border-radius: 40px;
+            backdrop-filter: blur(5px);
+            border: 1px solid #eebb77;
+            font-size: 1.2rem;
+            pointer-events: none;
+            z-index: 10;
+            text-align: center;
+            min-width: 200px;
+        }
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            display: flex;
+            gap: 15px;
+            z-index: 20;
+            pointer-events: none;
+        }
+        .btn {
+            pointer-events: auto;
+            background: #2c1e3c;
+            color: #ffefcf;
+            border: 2px solid #c9a87c;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 20px #b87c4d;
+            text-shadow: 0 0 8px #ffbb77;
+            transition: 0.2s;
+            letter-spacing: 1px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+        .btn:hover {
+            background: #4f356b;
+            box-shadow: 0 0 30px #ffb347;
+            border-color: #ffdca8;
+            transform: scale(1.05);
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        #status {
+            position: absolute;
+            bottom: 30px;
+            left: 20px;
+            color: #d4c5b0;
+            background: rgba(0,0,0,0.2);
+            padding: 6px 18px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+            z-index: 10;
+        }
+        @media (max-width: 600px) {
+            #info, #turn-indicator { font-size: 0.9rem; padding: 8px 16px; }
+            .btn { padding: 8px 16px; font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="info">🏰 ENCHANTED CHESS 🏰</div>
+    <div id="turn-indicator">✨ White's turn ✨</div>
+    <div id="message">Choose a piece, brave knight!</div>
+    <div id="status">⚔️ Fairy Tale Kingdom ⚔️</div>
+    <div id="controls">
+        <button class="btn" id="reset-btn">🔄 New Tale</button>
+        <a class="btn" href="../index.html">Main Menu</a>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+        
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#0b1424');
+        scene.fog = new THREE.FogExp2('#1a1f3a', 0.012);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(8, 10, 14);
+        camera.lookAt(0, 0.5, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.left = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.8;
+        controls.enableZoom = true;
+        controls.enablePan = true;
+        controls.maxPolarAngle = Math.PI / 2.3;
+        controls.target.set(0, 0.8, 0);
+
+        // --- LIGHTING & MAGIC ---
+        const dirLight = new THREE.DirectionalLight('#fff5e6', 1.2);
+        dirLight.position.set(5, 12, 7);
+        dirLight.castShadow = true;
+        dirLight.receiveShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        const d = 12;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+        dirLight.shadow.camera.near = 1;
+        dirLight.shadow.camera.far = 25;
+        dirLight.shadow.bias = -0.001;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.PointLight('#ffbb88', 0.9);
+        fillLight.position.set(-3, 5, 4);
+        scene.add(fillLight);
+        
+        const backLight = new THREE.PointLight('#88aaff', 0.7);
+        backLight.position.set(0, 6, -8);
+        scene.add(backLight);
+
+        const ambientLight = new THREE.AmbientLight('#404c70', 0.65);
+        scene.add(ambientLight);
+
+        // Stars
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsCount = 1200;
+        const starPositions = new Float32Array(starsCount * 3);
+        for (let i = 0; i < starsCount * 3; i += 3) {
+            const r = 30 + Math.random() * 40;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+            starPositions[i] = Math.sin(phi) * Math.cos(theta) * r;
+            starPositions[i+1] = Math.sin(phi) * Math.sin(theta) * r;
+            starPositions[i+2] = Math.cos(phi) * r;
+        }
+        starsGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starsMaterial = new THREE.PointsMaterial({color: '#fffbe3', size: 0.12, transparent: true});
+        const stars = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(stars);
+
+        // Magical dust
+        const dustGeo = new THREE.SphereGeometry(0.08);
+        const dustMat = new THREE.MeshStandardMaterial({ color: '#ffdd99', emissive: '#442200', transparent: true, opacity: 0.7 });
+        for (let i = 0; i < 60; i++) {
+            const dust = new THREE.Mesh(dustGeo, dustMat.clone());
+            dust.position.set((Math.random()-0.5)*10, Math.random()*3, (Math.random()-0.5)*10);
+            dust.castShadow = false;
+            dust.receiveShadow = false;
+            scene.add(dust);
+        }
+
+        // --- CHESSBOARD ---
+        const boardGroup = new THREE.Group();
+        const squareSize = 1.0;
+        const boardColors = { light: 0xf0e0c0, dark: 0x6b4e3a };
+        
+        const basePlate = new THREE.Mesh(
+            new THREE.BoxGeometry(9.2, 0.2, 9.2),
+            new THREE.MeshStandardMaterial({ color: '#4a3a2a', roughness: 0.7, metalness: 0.1, emissive: new THREE.Color('#231d15') })
+        );
+        basePlate.position.y = -0.15;
+        basePlate.receiveShadow = true;
+        basePlate.castShadow = true;
+        boardGroup.add(basePlate);
+
+        for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+                const isLight = (i + j) % 2 === 0;
+                const color = isLight ? boardColors.light : boardColors.dark;
+                const mat = new THREE.MeshStandardMaterial({ 
+                    color: color, 
+                    roughness: 0.4, 
+                    metalness: 0.1,
+                    emissive: isLight ? new THREE.Color('#332211') : new THREE.Color('#1a120a'),
+                    emissiveIntensity: 0.15
+                });
+                const square = new THREE.Mesh(new THREE.BoxGeometry(squareSize * 0.98, 0.05, squareSize * 0.98), mat);
+                square.position.x = i - 3.5;
+                square.position.z = j - 3.5;
+                square.position.y = 0.0;
+                square.receiveShadow = true;
+                square.castShadow = false;
+                boardGroup.add(square);
+                
+                if (!isLight) {
+                    const edgeMat = new THREE.LineBasicMaterial({ color: 0xc9a87c });
+                    const points = [];
+                    const x = i - 3.5, z = j - 3.5;
+                    points.push(new THREE.Vector3(x-0.49, 0.03, z-0.49));
+                    points.push(new THREE.Vector3(x+0.49, 0.03, z-0.49));
+                    points.push(new THREE.Vector3(x+0.49, 0.03, z+0.49));
+                    points.push(new THREE.Vector3(x-0.49, 0.03, z+0.49));
+                    points.push(new THREE.Vector3(x-0.49, 0.03, z-0.49));
+                    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+                    const line = new THREE.Line(lineGeo, edgeMat);
+                    boardGroup.add(line);
+                }
+            }
+        }
+
+        const towerMat = new THREE.MeshStandardMaterial({ color: '#b89a7a', roughness: 0.6, emissive: new THREE.Color('#332211'), emissiveIntensity: 0.3 });
+        const positions = [[-4.2, 0.3, -4.2], [4.2, 0.3, -4.2], [-4.2, 0.3, 4.2], [4.2, 0.3, 4.2]];
+        positions.forEach(pos => {
+            const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 0.8, 8), towerMat);
+            pillar.position.set(pos[0], pos[1], pos[2]);
+            pillar.castShadow = true;
+            pillar.receiveShadow = true;
+            boardGroup.add(pillar);
+            const top = new THREE.Mesh(new THREE.SphereGeometry(0.2), new THREE.MeshStandardMaterial({ color: '#d4af37', emissive: '#553300', emissiveIntensity: 0.5 }));
+            top.position.set(pos[0], pos[1]+0.55, pos[2]);
+            top.castShadow = true;
+            boardGroup.add(top);
+        });
+
+        scene.add(boardGroup);
+
+        // --- PIECES & LOGIC ---
+        const piecesGroup = new THREE.Group();
+        scene.add(piecesGroup);
+        
+        import { Chess } from 'https://cdn.skypack.dev/chess.js@0.11.0';
+        const chess = new Chess();
+        
+        let selectedSquare = null;
+        let selectedPieceMesh = null;
+        let isWhiteTurn = true;
+        let gameOver = false;
+        
+        const pieceMeshes = new Map();
+        const effectsGroup = new THREE.Group();
+        scene.add(effectsGroup);
+
+        // --- HELPER FUNCTIONS ---
+        function getSquareFromPosition(pos) {
+            const x = Math.round(pos.x + 3.5);
+            const z = Math.round(pos.z + 3.5);
+            if (x < 0 || x > 7 || z < 0 || z > 7) return null;
+            const file = String.fromCharCode(97 + x);
+            const rank = 8 - z;
+            return file + rank;
+        }
+
+        function getPositionFromSquare(sq) {
+            const file = sq.charCodeAt(0) - 97;
+            const rank = 8 - parseInt(sq[1]);
+            return new THREE.Vector3(file - 3.5, 0.15, rank - 3.5);
+        }
+
+        // --- CREATE FAIRY TALE PIECES ---
+        function createPieceMesh(type, color) {
+            const group = new THREE.Group();
+            const isWhite = color === 'w';
+            const mainColor = isWhite ? 0xfff5e0 : 0x2a1e12;
+            const accentColor = isWhite ? 0xd4af37 : 0x8b5e3c;
+            const metalMaterial = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.25, metalness: 0.4, emissive: isWhite ? new THREE.Color('#443322') : new THREE.Color('#221100'), emissiveIntensity: 0.2 });
+            const accentMaterial = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.3, metalness: 0.7, emissive: isWhite ? new THREE.Color('#996633') : new THREE.Color('#553311'), emissiveIntensity: 0.3 });
+            
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 0.18, 16), metalMaterial);
+            base.position.y = 0.09;
+            base.castShadow = true;
+            base.receiveShadow = true;
+            group.add(base);
+            
+            const baseRing = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 20), accentMaterial);
+            baseRing.rotation.x = Math.PI / 2;
+            baseRing.position.y = 0.2;
+            baseRing.castShadow = true;
+            group.add(baseRing);
+
+            if (type === 'p') {
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 0.5, 8), metalMaterial);
+                body.position.y = 0.45;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.22), accentMaterial);
+                head.position.y = 0.75;
+                head.castShadow = true;
+                group.add(head);
+                const plume = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 6), new THREE.MeshStandardMaterial({ color: isWhite ? 0x88aaff : 0xaa5555 }));
+                plume.position.y = 0.98;
+                plume.position.x = 0.05;
+                plume.rotation.z = 0.1;
+                plume.castShadow = true;
+                group.add(plume);
+            } else if (type === 'r') {
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.42, 0.6, 8), metalMaterial);
+                body.position.y = 0.5;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+                for (let i = 0; i < 4; i++) {
+                    const merlon = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.15), accentMaterial);
+                    merlon.position.y = 0.88;
+                    merlon.position.x = Math.sin(i*Math.PI/2)*0.28;
+                    merlon.position.z = Math.cos(i*Math.PI/2)*0.28;
+                    merlon.castShadow = true;
+                    group.add(merlon);
+                }
+            } else if (type === 'n') {
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.4, 0.5, 6), metalMaterial);
+                body.position.y = 0.45;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+                const head = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.4, 5), accentMaterial);
+                head.position.y = 0.7;
+                head.position.x = 0.2;
+                head.rotation.z = -0.2;
+                head.rotation.x = 0.1;
+                head.castShadow = true;
+                group.add(head);
+                const ear = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.15, 6), new THREE.MeshStandardMaterial({ color: 0xcc9966 }));
+                ear.position.y = 0.88;
+                ear.position.x = 0.3;
+                ear.rotation.z = -0.3;
+                ear.castShadow = true;
+                group.add(ear);
+            } else if (type === 'b') {
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.55, 8), metalMaterial);
+                body.position.y = 0.48;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+                const hat = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.5, 8), accentMaterial);
+                hat.position.y = 0.9;
+                hat.castShadow = true;
+                group.add(hat);
+                const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: '#442200' }));
+                ball.position.y = 1.18;
+                ball.castShadow = true;
+                group.add(ball);
+            } else if (type === 'q') {
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 0.65, 10), metalMaterial);
+                body.position.y = 0.53;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+                const crownBase = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.35, 0.2, 8), accentMaterial);
+                crownBase.position.y = 0.95;
+                crownBase.castShadow = true;
+                group.add(crownBase);
+                for (let i = 0; i < 5; i++) {
+                    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.25, 6), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
+                    spike.position.y = 1.15;
+                    spike.position.x = Math.sin(i*1.26)*0.22;
+                    spike.position.z = Math.cos(i*1.26)*0.22;
+                    spike.castShadow = true;
+                    group.add(spike);
+                }
+            } else if (type === 'k') {
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.7, 10), metalMaterial);
+                body.position.y = 0.55;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+                const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.38, 0.25, 8), accentMaterial);
+                crown.position.y = 1.0;
+                crown.castShadow = true;
+                group.add(crown);
+                const crossVert = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.35, 0.1), new THREE.MeshStandardMaterial({ color: 0xffaa00 }));
+                crossVert.position.y = 1.25;
+                crossVert.castShadow = true;
+                group.add(crossVert);
+                const crossHoriz = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0xffaa00 }));
+                crossHoriz.position.y = 1.2;
+                crossHoriz.castShadow = true;
+                group.add(crossHoriz);
+            }
+            
+            // Store metadata on the group and all children for raycasting
+            group.userData.type = type;
+            group.userData.color = color;
+            group.traverse(obj => { obj.userData.pieceGroup = group; });
+            
+            return group;
+        }
+
+        // --- REBUILD BOARD FROM CHESS.JS ---
+        function rebuildBoard() {
+            while(piecesGroup.children.length) {
+                piecesGroup.remove(piecesGroup.children[0]);
+            }
+            pieceMeshes.clear();
+            
+            const boardState = chess.board();
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = boardState[r][c];
+                    if (!piece) continue;
+                    const color = piece.color;
+                    const type = piece.type;
+                    const square = String.fromCharCode(97 + c) + (8 - r);
+                    
+                    const mesh = createPieceMesh(type, color);
+                    const pos = getPositionFromSquare(square);
+                    mesh.position.copy(pos);
+                    mesh.userData.square = square;
+                    mesh.userData.color = color;
+                    mesh.userData.type = type;
+                    
+                    piecesGroup.add(mesh);
+                    pieceMeshes.set(square, mesh);
+                }
+            }
+            
+            isWhiteTurn = chess.turn() === 'w';
+            updateTurnDisplay();
+        }
+
+        // --- MAGICAL CAPTURE EFFECTS ---
+        function playCaptureEffect(fromSq, toSq, capturedPieceMesh) {
+            const fromPos = getPositionFromSquare(fromSq);
+            const toPos = getPositionFromSquare(toSq);
+            
+            // Magic beam
+            const points = [fromPos.clone().add(new THREE.Vector3(0, 0.8, 0)), toPos.clone().add(new THREE.Vector3(0, 0.8, 0))];
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0xffaa00 });
+            const line = new THREE.Line(lineGeo, lineMat);
+            effectsGroup.add(line);
+            
+            const particleCount = 15;
+            for (let i = 0; i < particleCount; i++) {
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: '#ff4400' }));
+                sphere.position.lerpVectors(fromPos, toPos, i / particleCount);
+                sphere.position.y += 0.6;
+                effectsGroup.add(sphere);
+                setTimeout(() => effectsGroup.remove(sphere), 300 + i*20);
+            }
+            
+            if (capturedPieceMesh) {
+                const explodePos = capturedPieceMesh.position.clone();
+                for (let i=0; i<20; i++) {
+                    const frag = new THREE.Mesh(new THREE.DodecahedronGeometry(0.08), new THREE.MeshStandardMaterial({ color: 0xddaa66, emissive: '#aa3300' }));
+                    frag.position.copy(explodePos).add(new THREE.Vector3((Math.random()-0.5)*0.8, Math.random()*0.8, (Math.random()-0.5)*0.8));
+                    effectsGroup.add(frag);
+                    setTimeout(() => effectsGroup.remove(frag), 400);
+                }
+                capturedPieceMesh.userData.dying = true;
+                let step = 0;
+                const interval = setInterval(() => {
+                    step += 0.1;
+                    capturedPieceMesh.scale.setScalar(Math.max(0, 1 - step));
+                    capturedPieceMesh.rotation.y += 0.2;
+                    if (step >= 1) {
+                        clearInterval(interval);
+                        if (capturedPieceMesh.parent) piecesGroup.remove(capturedPieceMesh);
+                    }
+                }, 20);
+            }
+            
+            setTimeout(() => effectsGroup.remove(line), 400);
+            controls.autoRotate = true;
+        }
+
+        // --- ATTEMPT MOVE ---
+        function attemptMove(fromSq, toSq) {
+            if (gameOver) return false;
+            
+            const move = chess.move({ from: fromSq, to: toSq, promotion: 'q' });
+            if (move) {
+                const captured = move.captured;
+                const capturedMesh = pieceMeshes.get(toSq);
+                
+                if (captured) {
+                    playCaptureEffect(fromSq, toSq, capturedMesh);
+                }
+                
+                setTimeout(() => {
+                    rebuildBoard();
+                    selectedSquare = null;
+                    selectedPieceMesh = null;
+                    
+                    if (chess.game_over()) {
+                        gameOver = true;
+                        const winner = chess.turn() === 'w' ? 'Black' : 'White';
+                        document.getElementById('message').innerHTML = `🏆 ${winner} wins! 🏆`;
+                        document.getElementById('turn-indicator').innerHTML = '👑 Game Over 👑';
+                    } else {
+                        updateTurnDisplay();
+                    }
+                }, captured ? 450 : 50);
+                
+                return true;
+            }
+            return false;
+        }
+
+        function updateTurnDisplay() {
+            const turn = chess.turn();
+            isWhiteTurn = turn === 'w';
+            const colorName = isWhiteTurn ? 'White' : 'Black';
+            const icon = isWhiteTurn ? '🤍' : '🖤';
+            document.getElementById('turn-indicator').innerHTML = `${icon} ${colorName}'s turn ${icon}`;
+            document.getElementById('message').innerHTML = isWhiteTurn ? '✨ White to move, noble wizard ✨' : '🌙 Black to move, dark knight 🌙';
+        }
+
+        // --- RAYCASTER CLICK HANDLER (FIXED) ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        renderer.domElement.addEventListener('click', (event) => {
+            if (gameOver) return;
+            
+            mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+            mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(piecesGroup.children, true);
+            
+            if (intersects.length > 0) {
+                // Find the piece group from hit object
+                let hit = intersects[0].object;
+                let pieceGroup = hit.userData.pieceGroup;
+                if (!pieceGroup) {
+                    // Fallback: traverse up
+                    let parent = hit.parent;
+                    while (parent && !parent.userData.square) parent = parent.parent;
+                    pieceGroup = parent;
+                }
+                if (!pieceGroup || !pieceGroup.userData.square) return;
+                
+                const pieceColor = pieceGroup.userData.color;
+                const square = pieceGroup.userData.square;
+                const isCurrentTurn = (pieceColor === 'w' && isWhiteTurn) || (pieceColor === 'b' && !isWhiteTurn);
+                
+                if (selectedSquare) {
+                    if (selectedSquare === square) {
+                        selectedSquare = null;
+                        selectedPieceMesh = null;
+                        document.getElementById('message').innerHTML = isWhiteTurn ? '✨ White to move ✨' : '🌙 Black to move 🌙';
+                        return;
+                    }
+                    
+                    const success = attemptMove(selectedSquare, square);
+                    if (!success && isCurrentTurn) {
+                        selectedSquare = square;
+                        selectedPieceMesh = pieceGroup;
+                        document.getElementById('message').innerHTML = `⚔️ Selected piece at ${square} ⚔️`;
+                    } else if (!success) {
+                        selectedSquare = null;
+                        selectedPieceMesh = null;
+                    }
+                } else {
+                    if (isCurrentTurn) {
+                        selectedSquare = square;
+                        selectedPieceMesh = pieceGroup;
+                        document.getElementById('message').innerHTML = `⚔️ Selected piece at ${square} ⚔️`;
+                    }
+                }
+            } else {
+                selectedSquare = null;
+                selectedPieceMesh = null;
+                document.getElementById('message').innerHTML = isWhiteTurn ? '✨ White to move ✨' : '🌙 Black to move 🌙';
+            }
+        });
+
+        // --- RESET ---
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            chess.reset();
+            gameOver = false;
+            selectedSquare = null;
+            selectedPieceMesh = null;
+            rebuildBoard();
+            controls.autoRotate = true;
+            document.getElementById('message').innerHTML = '✨ A new tale begins! ✨';
+        });
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            controls.update();
+            stars.rotation.y += 0.0005;
+            
+            // Highlight selected piece
+            piecesGroup.children.forEach(child => {
+                if (child.isGroup) {
+                    const isSelected = (selectedPieceMesh === child);
+                    child.traverse(obj => {
+                        if (obj.material && !Array.isArray(obj.material)) {
+                            obj.material.emissiveIntensity = isSelected ? 0.8 : 0.2;
+                        }
+                    });
+                }
+            });
+            
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        
+        animate();
+        rebuildBoard();
+
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Decorative labels
+        function addLabel(text, pos, fontSize = '20px') {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.style.color = '#fae4b3';
+            div.style.fontSize = fontSize;
+            div.style.fontWeight = 'bold';
+            div.style.textShadow = '0 0 15px #b87c4d';
+            div.style.pointerEvents = 'none';
+            const label = new CSS2DObject(div);
+            label.position.copy(pos);
+            scene.add(label);
+        }
+        addLabel('🏰', new THREE.Vector3(-4.5, 1.2, -4.5), '30px');
+        addLabel('🏰', new THREE.Vector3(4.5, 1.2, -4.5), '30px');
+        addLabel('🏰', new THREE.Vector3(-4.5, 1.2, 4.5), '30px');
+        addLabel('🏰', new THREE.Vector3(4.5, 1.2, 4.5), '30px');
+        addLabel('⚜️ Enchanted Chess ⚜️', new THREE.Vector3(0, 2.8, 0), '24px');
+
+        console.log('✨ Enchanted Chess is ready! May friendship win! ✨');
+    </script>
+</body>
+</html>
