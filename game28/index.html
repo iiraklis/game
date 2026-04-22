@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>✨ Fairy Tale Chess 3D</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:#050012;font-family:'Nunito',sans-serif;touch-action:none;}
+#c{position:fixed;top:0;left:0;width:100%;height:100%;display:block;touch-action:none;}
+#ui{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;}
+
+/* TOP BAR */
+#topBar{
+  position:absolute;top:0;left:0;right:0;
+  background:linear-gradient(180deg,rgba(5,0,18,.92) 0%,transparent 100%);
+  padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
+  pointer-events:auto;
+}
+.title{
+  font-family:'Cinzel Decorative',serif;font-size:clamp(.8rem,2.2vw,1.4rem);
+  background:linear-gradient(135deg,#ffe066,#FFD700 40%,#fff 55%,#FFD700 70%,#B8860B);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 12px rgba(255,215,0,.6));
+  white-space:nowrap;
+}
+.topBtns{display:flex;gap:7px;pointer-events:auto;}
+.topBtn{
+  background:linear-gradient(135deg,#5B1DAA,#8B30EA);
+  border:1.5px solid rgba(255,215,0,.45);border-radius:9px;
+  color:#FFD700;font-family:'Cinzel Decorative',serif;
+  font-size:clamp(.5rem,.9vw,.65rem);
+  padding:6px 11px;cursor:pointer;transition:all .18s;white-space:nowrap;
+}
+.topBtn:hover{box-shadow:0 0 14px rgba(255,215,0,.45);transform:translateY(-1px);}
+.topBtn:active{transform:scale(.96);}
+
+/* SIDE PANELS */
+#leftPanel,#rightPanel{
+  position:absolute;top:50%;transform:translateY(-50%);
+  width:clamp(100px,14vw,155px);
+  background:linear-gradient(160deg,rgba(18,0,45,.93),rgba(45,5,85,.9));
+  border:1.5px solid rgba(255,215,0,.28);border-radius:14px;
+  padding:13px 12px;color:#fff;
+  box-shadow:0 0 28px rgba(110,30,200,.28);
+  backdrop-filter:blur(14px);
+  pointer-events:auto;
+}
+#leftPanel{left:10px;}
+#rightPanel{right:10px;}
+.plbl{
+  font-family:'Cinzel Decorative',serif;font-size:.52rem;
+  color:rgba(255,170,255,.5);letter-spacing:1.5px;text-transform:uppercase;
+  display:block;margin-bottom:5px;
+}
+.turnIcon{font-size:clamp(26px,4.5vw,40px);display:block;text-align:center;animation:flt 2.2s ease-in-out infinite;}
+@keyframes flt{0%,100%{transform:translateY(0) rotate(-2deg);}50%{transform:translateY(-6px) rotate(2deg);}}
+.turnNm{font-family:'Cinzel Decorative',serif;font-size:.58rem;text-align:center;display:block;margin-top:4px;}
+.turnNm.w{color:#fff5b0;}.turnNm.b{color:#cc99ff;}
+.capBox{font-size:12px;min-height:24px;word-break:break-all;background:rgba(0,0,0,.22);border-radius:7px;padding:4px 5px;line-height:1.5;}
+.histBox{
+  max-height:clamp(70px,11vh,140px);overflow-y:auto;
+  font-size:.62rem;color:rgba(255,255,255,.58);
+  background:rgba(0,0,0,.22);border-radius:7px;padding:5px 6px;font-family:monospace;
+  margin-top:4px;
+}
+.histBox::-webkit-scrollbar{width:2px;}
+.histBox::-webkit-scrollbar-thumb{background:rgba(255,215,0,.3);}
+.stBar{
+  text-align:center;padding:5px;border-radius:7px;
+  background:rgba(220,50,50,.18);border:1px solid rgba(220,50,50,.38);
+  color:#ff8888;font-size:.68rem;font-weight:700;display:none;margin-top:6px;
+}
+.stBar.on{display:block;}
+
+/* MOBILE BOTTOM BAR */
+#botBar{
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(0deg,rgba(5,0,18,.96) 0%,transparent 100%);
+  padding:8px 12px 12px;display:none;
+  flex-direction:column;gap:6px;align-items:center;
+  pointer-events:auto;
+}
+.mRow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;}
+.mChip{
+  background:rgba(18,0,45,.92);border:1px solid rgba(255,215,0,.3);border-radius:9px;
+  padding:5px 11px;color:#fff;font-size:.72rem;
+  backdrop-filter:blur(8px);white-space:nowrap;
+}
+.mChip.turn{font-family:'Cinzel Decorative',serif;color:#FFD700;font-size:.66rem;}
+.mChip.check{color:#ff8888;border-color:rgba(220,50,50,.4);display:none;}
+.mChip.check.on{display:block;}
+
+/* GAME OVER */
+#goOverlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:100;
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  padding:20px;
+}
+#goOverlay.on{display:flex;}
+.goBox{
+  background:linear-gradient(135deg,#1a0045,#5B1DAA);
+  border:3px solid #FFD700;border-radius:22px;
+  padding:clamp(24px,5vw,44px) clamp(28px,7vw,64px);text-align:center;
+  box-shadow:0 0 80px rgba(255,215,0,.45),0 0 160px rgba(130,40,255,.25);
+  animation:popIn .5s cubic-bezier(.34,1.56,.64,1);max-width:90vw;
+}
+@keyframes popIn{from{transform:scale(.3) rotate(-10deg);opacity:0;}to{transform:scale(1) rotate(0);opacity:1;}}
+.goIcon{font-size:clamp(48px,10vw,74px);margin-bottom:10px;animation:bounce .9s ease-in-out infinite alternate;}
+@keyframes bounce{from{transform:scale(1);}to{transform:scale(1.15) translateY(-7px);}}
+.goTitle{font-family:'Cinzel Decorative',serif;font-size:clamp(1.1rem,3.5vw,1.9rem);color:#FFD700;margin-bottom:6px;text-shadow:0 0 18px rgba(255,215,0,.8);}
+.goSub{color:rgba(255,200,255,.9);font-size:clamp(.75rem,1.8vw,1rem);margin-bottom:22px;}
+.goBtn{
+  padding:11px 38px;background:linear-gradient(135deg,#5B1DAA,#8B30EA);
+  border:2px solid #FFD700;border-radius:12px;color:#FFD700;
+  font-family:'Cinzel Decorative',serif;font-size:.82rem;cursor:pointer;transition:all .2s;
+  pointer-events:auto;
+}
+.goBtn:hover,.goBtn:active{box-shadow:0 0 22px rgba(255,215,0,.55);transform:scale(1.05);}
+
+/* PROMOTION */
+#promoOverlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;
+  display:none;align-items:center;justify-content:center;padding:20px;
+}
+#promoOverlay.on{display:flex;}
+.promoBox{
+  background:linear-gradient(135deg,#1a0045,#5B1DAA);
+  border:3px solid #FFD700;border-radius:20px;
+  padding:26px 36px;text-align:center;
+  box-shadow:0 0 60px rgba(255,215,0,.4);max-width:90vw;
+}
+.promoTitle{font-family:'Cinzel Decorative',serif;color:#FFD700;font-size:.9rem;margin-bottom:14px;}
+.promoPieces{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+.promoP{
+  font-size:clamp(34px,8vw,48px);cursor:pointer;padding:8px;border-radius:10px;
+  background:rgba(255,255,255,.07);border:2px solid rgba(255,215,0,.28);
+  transition:all .18s;pointer-events:auto;
+}
+.promoP:hover,.promoP:active{background:rgba(255,215,0,.18);transform:scale(1.18);}
+
+/* RESPONSIVE */
+@media(max-width:640px){
+  #leftPanel,#rightPanel{display:none!important;}
+  #botBar{display:flex!important;}
+}
+@media(max-height:480px) and (orientation:landscape){
+  #leftPanel,#rightPanel{
+    top:54px;transform:none;max-height:calc(100vh - 70px);
+    overflow-y:auto;width:110px;
+  }
+  .histBox{max-height:60px;}
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div id="topBar">
+    <div class="title">✨ Fairy Tale Chess</div>
+    <div class="topBtns">
+      <button class="topBtn" onclick="undoMove()">↩ Undo</button>
+      <button class="topBtn" onclick="newGame()">🌟 New</button>
+      <button class="topBtn" onclick="window.location.href='../index.html'">Main Menu</button>
+    </div>
+  </div>
+
+  <div id="leftPanel">
+    <span class="plbl">⚔️ Current Turn</span>
+    <span class="turnIcon" id="ti">♔</span>
+    <span class="turnNm w" id="tn">☀️ White Kingdom</span>
+    <div class="stBar" id="stMsg"></div>
+    <div style="margin-top:9px;">
+      <span class="plbl">🏆 White Captures</span>
+      <div class="capBox" id="wCap"></div>
+    </div>
+  </div>
+
+  <div id="rightPanel">
+    <span class="plbl">🏆 Black Captures</span>
+    <div class="capBox" id="bCap"></div>
+    <div style="margin-top:9px;">
+      <span class="plbl">📜 Move History</span>
+      <div class="histBox" id="hist"></div>
+    </div>
+  </div>
+
+  <div id="botBar">
+    <div class="mRow">
+      <div class="mChip turn" id="mTurn">☀️ White's Turn</div>
+      <div class="mChip check" id="mCheck">⚔️ Check!</div>
+    </div>
+    <div class="mRow">
+      <div class="mChip" id="mWCap" style="font-size:11px;max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">White: —</div>
+      <div class="mChip" id="mBCap" style="font-size:11px;max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">Black: —</div>
+    </div>
+  </div>
+</div>
+
+<div id="goOverlay">
+  <div class="goBox">
+    <div class="goIcon" id="goIcon">🎉</div>
+    <div class="goTitle" id="goTitle">Game Over!</div>
+    <div class="goSub" id="goSub"></div>
+    <button class="goBtn" onclick="newGame()">✨ Play Again! ✨</button>
+  </div>
+</div>
+
+<div id="promoOverlay">
+  <div class="promoBox">
+    <div class="promoTitle">✨ Choose promotion piece ✨</div>
+    <div class="promoPieces" id="promoPieces"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════
+//  THREE.JS — SCENE SETUP
+// ═══════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050012);
+scene.fog = new THREE.FogExp2(0x060018, 0.022);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+
+function setSize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  updateCam();
+}
+function updateCam() {
+  const a = innerWidth / innerHeight;
+  if (a < 0.75) camera.position.set(0, 15, 8.5);      // portrait phone
+  else if (a < 1.1) camera.position.set(0, 13, 9);    // tablet portrait
+  else if (a < 1.6) camera.position.set(0, 11, 9.5);  // tablet landscape / small desktop
+  else camera.position.set(0, 10, 9);                  // desktop landscape
+  camera.lookAt(0, 0, 0);
+}
+window.addEventListener('resize', setSize);
+setSize();
+
+// LIGHTS
+scene.add(new THREE.AmbientLight(0x2233AA, 0.55));
+
+const sun = new THREE.DirectionalLight(0xFFF8F0, 1.3);
+sun.position.set(5, 12, 5);
+sun.castShadow = true;
+sun.shadow.mapSize.setScalar(2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -8;
+sun.shadow.camera.right = sun.shadow.camera.top = 8;
+sun.shadow.camera.far = 40;
+scene.add(sun);
+
+const goldPt = new THREE.PointLight(0xFFD700, 2.0, 28);
+goldPt.position.set(0, 14, 0);
+scene.add(goldPt);
+
+const purplePt = new THREE.PointLight(0xAA44FF, 0.9, 22);
+purplePt.position.set(-7, 4, -7);
+scene.add(purplePt);
+
+const bluePt = new THREE.PointLight(0x3366FF, 0.5, 18);
+bluePt.position.set(7, 3, 7);
+scene.add(bluePt);
+
+// Candle flicker lights at board corners
+const candleLights = [];
+[[-4.8,1.2,-4.8],[4.8,1.2,-4.8],[-4.8,1.2,4.8],[4.8,1.2,4.8]].forEach(([x,y,z],i) => {
+  const l = new THREE.PointLight(0xFF8800, 0.9, 6);
+  l.position.set(x, y, z);
+  l._phase = i * 1.7;
+  scene.add(l);
+  candleLights.push(l);
+  // Candle pillar
+  const cyl = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.07, 0.09, 0.6, 8),
+    new THREE.MeshPhongMaterial({color:0xFFF5DC, emissive:0x221100, emissiveIntensity:.1})
+  );
+  cyl.position.set(x, y - 0.6, z);
+  scene.add(cyl);
+  // Flame sphere
+  const fl = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06, 8, 8),
+    new THREE.MeshPhongMaterial({color:0xFF6600, emissive:0xFF4400, emissiveIntensity:1.2, transparent:true, opacity:.9})
+  );
+  fl.position.set(x, y, z);
+  fl._baseY = y;
+  fl._phase = i;
+  scene.add(fl);
+  candleLights.push({light:l, flame:fl});
+});
+
+// STARS
+(function() {
+  const cnt = 2400, pos = new Float32Array(cnt*3), col = new Float32Array(cnt*3);
+  for (let i=0; i<cnt; i++) {
+    const r = 28 + Math.random()*28, t = Math.random()*Math.PI*2, p = Math.random()*Math.PI;
+    pos[i*3]=r*Math.sin(p)*Math.cos(t); pos[i*3+1]=r*Math.cos(p); pos[i*3+2]=r*Math.sin(p)*Math.sin(t);
+    const b = .5 + Math.random()*.5;
+    col[i*3]=b*(0.8+Math.random()*.2); col[i*3+1]=b*(0.8+Math.random()*.2); col[i*3+2]=b;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  g.setAttribute('color', new THREE.BufferAttribute(col,3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({size:.14, vertexColors:true, transparent:true, opacity:.88})));
+})();
+
+// ═══════════════════════════════════════════════
+//  BOARD GEOMETRY
+// ═══════════════════════════════════════════════
+
+const SQ = 1.0, BOARD_TOP = 0.16;
+
+// Gold platform base
+const base = new THREE.Mesh(
+  new THREE.BoxGeometry(9.4, 0.45, 9.4),
+  new THREE.MeshPhongMaterial({color:0xCC8800, specular:0xFFD700, shininess:90, emissive:0x330E00, emissiveIntensity:.25})
+);
+base.position.y = -0.225;
+base.receiveShadow = true;
+scene.add(base);
+
+// Engraved border ring
+const brim = new THREE.Mesh(
+  new THREE.BoxGeometry(9.1, 0.12, 9.1),
+  new THREE.MeshPhongMaterial({color:0xFFD700, specular:0xFFFFCC, shininess:180, emissive:0x554400, emissiveIntensity:.4})
+);
+brim.position.y = 0.06;
+scene.add(brim);
+
+// 64 squares
+const sqMeshes = [];
+const lightMat = new THREE.MeshPhongMaterial({color:0xF2B8D8, specular:0xffffff, shininess:28, emissive:0x110018, emissiveIntensity:.08});
+const darkMat  = new THREE.MeshPhongMaterial({color:0x7030A0, specular:0xCC99FF, shininess:55, emissive:0x1A0040, emissiveIntensity:.18});
+const sqGeo = new THREE.BoxGeometry(0.988, 0.08, 0.988);
+
+for (let r=0; r<8; r++) {
+  sqMeshes[r] = [];
+  for (let c=0; c<8; c++) {
+    const m = new THREE.Mesh(sqGeo, ((r+c)%2===0 ? lightMat : darkMat).clone());
+    m.position.set(c - 3.5, BOARD_TOP - 0.04, r - 3.5);
+    m.receiveShadow = true;
+    m.userData = {type:'sq', row:r, col:c};
+    scene.add(m);
+    sqMeshes[r][c] = m;
+  }
+}
+
+// Corner ornaments
+const ornGeo = new THREE.SphereGeometry(0.18, 12, 12);
+const ornMat = new THREE.MeshPhongMaterial({color:0xFFD700, specular:0xFFFFAA, shininess:200, emissive:0x443300, emissiveIntensity:.3});
+[[-4.3,0.2,-4.3],[4.3,0.2,-4.3],[-4.3,0.2,4.3],[4.3,0.2,4.3]].forEach(([x,y,z]) => {
+  const o = new THREE.Mesh(ornGeo, ornMat);
+  o.position.set(x,y,z);
+  scene.add(o);
+});
+
+// Invisible plane for click/touch picking
+const pickPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(10, 10),
+  new THREE.MeshBasicMaterial({visible:false, side:THREE.DoubleSide})
+);
+pickPlane.rotation.x = -Math.PI/2;
+pickPlane.position.y = BOARD_TOP;
+scene.add(pickPlane);
+
+// ═══════════════════════════════════════════════
+//  PIECE GEOMETRY HELPERS
+// ═══════════════════════════════════════════════
+
+const isMobile = innerWidth < 768;
+const SEG = isMobile ? 18 : 28;
+
+function lp(arr) { return arr.map(([x,y])=>new THREE.Vector2(x,y)); }
+
+function wMat() {
+  return new THREE.MeshPhongMaterial({
+    color:0xFFF8E7, specular:0xFFD700, shininess:220,
+    emissive:0x221108, emissiveIntensity:.06
+  });
+}
+function bMat() {
+  return new THREE.MeshPhongMaterial({
+    color:0x22004A, specular:0xBB77FF, shininess:260,
+    emissive:0x440088, emissiveIntensity:.38
+  });
+}
+function mat(col) { return col==='w' ? wMat() : bMat(); }
+
+function addMesh(geo, m, cast=true) {
+  const mesh = new THREE.Mesh(geo, m);
+  if(cast) mesh.castShadow = true;
+  return mesh;
+}
+
+function makePawn(col) {
+  const m = mat(col);
+  return addMesh(new THREE.LatheGeometry(lp([
+    [.33,0],[.37,.03],[.31,.08],[.18,.16],[.13,.28],
+    [.11,.42],[.18,.54],[.26,.68],[.26,.76],[.20,.83],[.12,.88],[.01,.90]
+  ]), SEG), m);
+}
+
+function makeRook(col) {
+  const g = new THREE.Group();
+  const m = mat(col);
+  g.add(addMesh(new THREE.LatheGeometry(lp([
+    [.33,0],[.36,.03],[.30,.08],[.18,.16],[.14,.28],
+    [.13,.50],[.19,.58],[.27,.64],[.28,.82],[.24,.84],[.01,.84]
+  ]), SEG), m));
+  // Battlements
+  const bm = mat(col), bg = new THREE.BoxGeometry(.10,.13,.10);
+  [[.16,.88,.16],[.16,.88,-.16],[-.16,.88,.16],[-.16,.88,-.16]].forEach(([x,y,z])=>{
+    const b = addMesh(bg, bm.clone()); b.position.set(x,y,z); g.add(b);
+  });
+  return g;
+}
+
+function makeKnight(col) {
+  const g = new THREE.Group();
+  const m = mat(col);
+  // Base stem
+  g.add(addMesh(new THREE.LatheGeometry(lp([
+    [.31,0],[.34,.03],[.28,.08],[.17,.16],[.12,.28],
+    [.10,.44],[.13,.52],[.15,.58],[.01,.58]
+  ]), SEG), m));
+  // Neck - tapered cylinder
+  const neck = addMesh(new THREE.CylinderGeometry(.08,.12,.34,14), mat(col));
+  neck.position.set(.07,.73,0); neck.rotation.z = .48; g.add(neck);
+  // Head box
+  const head = addMesh(new THREE.BoxGeometry(.26,.19,.17), mat(col));
+  head.position.set(.09,.92,0); head.rotation.z = -.22; g.add(head);
+  // Snout
+  const snout = addMesh(new THREE.BoxGeometry(.14,.10,.12), mat(col));
+  snout.position.set(.2,.85,0); g.add(snout);
+  // Ears
+  const earG = new THREE.BoxGeometry(.05,.1,.05);
+  [[.06,1.03,.04],[.06,1.03,-.04]].forEach(([x,y,z])=>{
+    const e = addMesh(earG, mat(col)); e.position.set(x,y,z); g.add(e);
+  });
+  return g;
+}
+
+function makeBishop(col) {
+  const g = new THREE.Group();
+  const m = mat(col);
+  g.add(addMesh(new THREE.LatheGeometry(lp([
+    [.31,0],[.34,.03],[.28,.08],[.17,.16],[.11,.28],
+    [.09,.55],[.13,.66],[.18,.76],[.14,.84],
+    [.08,.92],[.05,.98],[.07,1.04],[.05,1.08],[.01,1.10]
+  ]), SEG), m));
+  // Ball on top
+  const ball = addMesh(new THREE.SphereGeometry(.085,14,14), mat(col));
+  ball.position.y = 1.18; g.add(ball);
+  return g;
+}
+
+function makeQueen(col) {
+  const g = new THREE.Group();
+  const m = mat(col);
+  g.add(addMesh(new THREE.LatheGeometry(lp([
+    [.35,0],[.38,.03],[.32,.08],[.20,.16],[.14,.28],
+    [.11,.55],[.20,.68],[.29,.82],[.27,.90],
+    [.22,.98],[.15,1.04],[.10,1.10],[.01,1.12]
+  ]), SEG), m));
+  // Central sphere
+  const cs = addMesh(new THREE.SphereGeometry(.095,14,14), mat(col));
+  cs.position.y = 1.21; g.add(cs);
+  // Crown balls (5)
+  for(let i=0; i<5; i++){
+    const a = (i/5)*Math.PI*2;
+    const cb = addMesh(new THREE.SphereGeometry(.052,10,10), mat(col));
+    cb.position.set(Math.cos(a)*.15, 1.13, Math.sin(a)*.15); g.add(cb);
+  }
+  return g;
+}
+
+function makeKing(col) {
+  const g = new THREE.Group();
+  const m = mat(col);
+  g.add(addMesh(new THREE.LatheGeometry(lp([
+    [.35,0],[.38,.03],[.32,.08],[.20,.16],[.14,.28],
+    [.11,.55],[.20,.68],[.29,.82],[.27,.90],
+    [.22,.98],[.15,1.04],[.10,1.10],[.01,1.12]
+  ]), SEG), m));
+  // Cross vertical
+  const cv = addMesh(new THREE.BoxGeometry(.07,.30,.07), mat(col));
+  cv.position.y = 1.26; g.add(cv);
+  // Cross horizontal
+  const ch = addMesh(new THREE.BoxGeometry(.22,.07,.07), mat(col));
+  ch.position.y = 1.32; g.add(ch);
+  return g;
+}
+
+function createPieceMesh(type, col) {
+  switch(type){
+    case 'P': return makePawn(col);
+    case 'R': return makeRook(col);
+    case 'N': return makeKnight(col);
+    case 'B': return makeBishop(col);
+    case 'Q': return makeQueen(col);
+    case 'K': return makeKing(col);
+  }
+}
+
+function sq3D(row, col) {
+  return new THREE.Vector3(col - 3.5, BOARD_TOP, row - 3.5);
+}
+
+// ═══════════════════════════════════════════════
+//  CHESS ENGINE
+// ═══════════════════════════════════════════════
+
+const SYM = {
+  wP:'♙',wR:'♖',wN:'♘',wB:'♗',wQ:'♕',wK:'♔',
+  bP:'♟',bR:'♜',bN:'♞',bB:'♝',bQ:'♛',bK:'♚'
+};
+const FILES = 'abcdefgh';
+
+const gc = p => p ? p[0] : null;
+const gt = p => p ? p[1] : null;
+const opp = c => c==='w' ? 'b' : 'w';
+const inb = (r,c) => r>=0 && r<8 && c>=0 && c<8;
+const cb = b => b.map(r=>[...r]);
+
+function initState() {
+  return {
+    board:[
+      ['bR','bN','bB','bQ','bK','bB','bN','bR'],
+      ['bP','bP','bP','bP','bP','bP','bP','bP'],
+      [null,null,null,null,null,null,null,null],
+      [null,null,null,null,null,null,null,null],
+      [null,null,null,null,null,null,null,null],
+      [null,null,null,null,null,null,null,null],
+      ['wP','wP','wP','wP','wP','wP','wP','wP'],
+      ['wR','wN','wB','wQ','wK','wB','wN','wR']
+    ],
+    turn:'w', selected:null, validMoves:[],
+    enPassant:null, cr:{wK:true,wQ:true,bK:true,bQ:true},
+    cap:{w:[],b:[]}, hist:[], check:false, gameOver:false
+  };
+}
+
+function cloneState(s){
+  return {
+    board:cb(s.board), turn:s.turn, selected:null, validMoves:[],
+    enPassant:s.enPassant?[...s.enPassant]:null, cr:{...s.cr},
+    cap:{w:[...s.cap.w],b:[...s.cap.b]}, hist:[...s.hist],
+    check:s.check, gameOver:s.gameOver
+  };
+}
+
+function pseudoMoves(board,r,c,ep,cr){
+  const p=board[r][c]; if(!p) return [];
+  const col=gc(p),tp=gt(p),mvs=[];
+  const add=(nr,nc,ex={})=>{
+    if(!inb(nr,nc)||gc(board[nr][nc])===col) return;
+    mvs.push([nr,nc,ex]);
+  };
+  const slide=(dr,dc)=>{
+    let nr=r+dr,nc=c+dc;
+    while(inb(nr,nc)){
+      if(board[nr][nc]){if(gc(board[nr][nc])!==col)mvs.push([nr,nc,{}]);break;}
+      mvs.push([nr,nc,{}]); nr+=dr; nc+=dc;
+    }
+  };
+  switch(tp){
+    case'P':{
+      const d=col==='w'?-1:1, sr=col==='w'?6:1;
+      if(inb(r+d,c)&&!board[r+d][c]){
+        mvs.push([r+d,c,{}]);
+        if(r===sr&&!board[r+2*d][c]) mvs.push([r+2*d,c,{ept:[r+d,c]}]);
+      }
+      for(const dc of[-1,1]){
+        const nr=r+d,nc=c+dc;
+        if(!inb(nr,nc)) continue;
+        if(board[nr][nc]&&gc(board[nr][nc])!==col) mvs.push([nr,nc,{}]);
+        if(ep&&ep[0]===nr&&ep[1]===nc) mvs.push([nr,nc,{enp:true,epr:r,epc:nc}]);
+      }
+      break;
+    }
+    case'R': for(const[dr,dc]of[[0,1],[0,-1],[1,0],[-1,0]]) slide(dr,dc); break;
+    case'N': for(const[dr,dc]of[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]) add(r+dr,c+dc); break;
+    case'B': for(const[dr,dc]of[[1,1],[1,-1],[-1,1],[-1,-1]]) slide(dr,dc); break;
+    case'Q': for(const[dr,dc]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]) slide(dr,dc); break;
+    case'K':{
+      for(const[dr,dc]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]) add(r+dr,c+dc);
+      if(col==='w'&&r===7){
+        if(cr.wK&&!board[7][5]&&!board[7][6]&&board[7][7]==='wR') mvs.push([7,6,{castle:'K'}]);
+        if(cr.wQ&&!board[7][3]&&!board[7][2]&&!board[7][1]&&board[7][0]==='wR') mvs.push([7,2,{castle:'Q'}]);
+      }
+      if(col==='b'&&r===0){
+        if(cr.bK&&!board[0][5]&&!board[0][6]&&board[0][7]==='bR') mvs.push([0,6,{castle:'K'}]);
+        if(cr.bQ&&!board[0][3]&&!board[0][2]&&!board[0][1]&&board[0][0]==='bR') mvs.push([0,2,{castle:'Q'}]);
+      }
+      break;
+    }
+  }
+  return mvs;
+}
+
+function applyTemp(board,fr,fc,tr,tc,ex){
+  const b=cb(board);
+  b[tr][tc]=b[fr][fc]; b[fr][fc]=null;
+  if(ex.enp) b[ex.epr][ex.epc]=null;
+  if(ex.castle){
+    if(ex.castle==='K'){b[fr][5]=b[fr][7];b[fr][7]=null;}
+    else{b[fr][3]=b[fr][0];b[fr][0]=null;}
+  }
+  return b;
+}
+
+function attacked(board,r,c,byCol){
+  for(let rr=0;rr<8;rr++) for(let cc=0;cc<8;cc++){
+    if(gc(board[rr][cc])!==byCol) continue;
+    if(pseudoMoves(board,rr,cc,null,{wK:false,wQ:false,bK:false,bQ:false}).some(([mr,mc])=>mr===r&&mc===c)) return true;
+  }
+  return false;
+}
+
+function inCheck(board,col){
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++)
+    if(board[r][c]===col+'K') return attacked(board,r,c,opp(col));
+  return false;
+}
+
+function legalMoves(state,r,c){
+  const p=state.board[r][c]; if(!p) return [];
+  const col=gc(p);
+  return pseudoMoves(state.board,r,c,state.enPassant,state.cr).filter(([tr,tc,ex])=>{
+    if(ex.castle){
+      if(inCheck(state.board,col)) return false;
+      const pass=ex.castle==='K'?[5]:[3];
+      for(const pc of pass)
+        if(attacked(applyTemp(state.board,r,c,r,pc),r,pc,opp(col))) return false;
+    }
+    return !inCheck(applyTemp(state.board,r,c,tr,tc,ex),col);
+  });
+}
+
+function anyLegal(state,col){
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++)
+    if(gc(state.board[r][c])===col && legalMoves(state,r,c).length>0) return true;
+  return false;
+}
+
+function algb(r,c){ return FILES[c]+(8-r); }
+
+// ═══════════════════════════════════════════════
+//  GAME STATE + PIECE MESH MANAGEMENT
+// ═══════════════════════════════════════════════
+
+let gs = initState(), undoStack = [], pendingPromo = null, animating = false;
+let pieceMeshes = []; // {group, row, col, color, type, alive}
+
+// Visual effect meshes
+let selRing = null, moveDots = [], checkDisc = null;
+
+function sq3DCenter(row, col) {
+  return sq3D(row, col);
+}
+
+function initPieces() {
+  pieceMeshes.forEach(p => { if(p.group) scene.remove(p.group); });
+  pieceMeshes = [];
+  clearVisuals();
+
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p = gs.board[r][c];
+    if(!p) continue;
+    const idx = pieceMeshes.length;
+    const group = createPieceMesh(gt(p), gc(p));
+    const pos = sq3D(r, c);
+    group.position.copy(pos);
+    group.traverse(ch => { if(ch.isMesh) ch.userData = {type:'piece', idx}; });
+    scene.add(group);
+    pieceMeshes.push({group, row:r, col:c, color:gc(p), type:gt(p), alive:true});
+  }
+}
+
+function findPieceMesh(row, col) {
+  return pieceMeshes.find(p => p.alive && p.row===row && p.col===col);
+}
+
+// ═══════════════════════════════════════════════
+//  VISUAL EFFECTS
+// ═══════════════════════════════════════════════
+
+function clearVisuals() {
+  if(selRing){ scene.remove(selRing); selRing = null; }
+  moveDots.forEach(d => scene.remove(d)); moveDots = [];
+  if(checkDisc){ scene.remove(checkDisc); checkDisc = null; }
+  // Reset square materials
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const m = sqMeshes[r][c].material;
+    m.emissive.setHex((r+c)%2===0 ? 0x110018 : 0x1A0040);
+    m.emissiveIntensity = (r+c)%2===0 ? .08 : .18;
+  }
+}
+
+function showSelection(row, col, moves) {
+  clearVisuals();
+
+  // Lift selected piece
+  const pm = findPieceMesh(row, col);
+  if(pm) pm.group.position.y = BOARD_TOP + 0.35;
+
+  // Glowing ring under selection
+  const rGeo = new THREE.TorusGeometry(.38, .05, 8, 32);
+  const rMat = new THREE.MeshPhongMaterial({color:0xFFD700, emissive:0xFFAA00, emissiveIntensity:1.2, transparent:true, opacity:.9});
+  selRing = new THREE.Mesh(rGeo, rMat);
+  const sp = sq3D(row, col);
+  selRing.position.set(sp.x, BOARD_TOP + 0.01, sp.z);
+  selRing.rotation.x = Math.PI/2;
+  scene.add(selRing);
+
+  // Highlight selected square
+  sqMeshes[row][col].material.emissive.setHex(0x665500);
+  sqMeshes[row][col].material.emissiveIntensity = .6;
+
+  // Move dots / capture rings
+  moves.forEach(([mr, mc]) => {
+    const captured = gs.board[mr][mc] && gc(gs.board[mr][mc]) !== gs.turn;
+    const enp = moves.find(m=>m[0]===mr&&m[1]===mc&&m[2]&&m[2].enp);
+    const isCapture = captured || enp;
+
+    if(isCapture) {
+      const rg = new THREE.TorusGeometry(.44, .05, 8, 24);
+      const rm2 = new THREE.MeshPhongMaterial({color:0xFF3344, emissive:0xFF2233, emissiveIntensity:1.2, transparent:true, opacity:.85});
+      const dot = new THREE.Mesh(rg, rm2);
+      const dp = sq3D(mr, mc);
+      dot.position.set(dp.x, BOARD_TOP+.02, dp.z);
+      dot.rotation.x = Math.PI/2;
+      dot._mr = mr; dot._mc = mc;
+      scene.add(dot); moveDots.push(dot);
+    } else {
+      const dg = new THREE.CylinderGeometry(.18, .18, .025, 16);
+      const dm = new THREE.MeshPhongMaterial({color:0x00FF88, emissive:0x00FF88, emissiveIntensity:1.4, transparent:true, opacity:.8});
+      const dot = new THREE.Mesh(dg, dm);
+      const dp = sq3D(mr, mc);
+      dot.position.set(dp.x, BOARD_TOP+.02, dp.z);
+      dot._mr = mr; dot._mc = mc;
+      scene.add(dot); moveDots.push(dot);
+    }
+
+    // Highlight target square lightly
+    sqMeshes[mr][mc].material.emissive.setHex(isCapture ? 0x440000 : 0x002200);
+    sqMeshes[mr][mc].material.emissiveIntensity = .45;
+  });
+}
+
+function showCheck(row, col) {
+  if(checkDisc) scene.remove(checkDisc);
+  const dg = new THREE.CylinderGeometry(.47, .47, .018, 24);
+  const dm = new THREE.MeshPhongMaterial({color:0xFF1111, emissive:0xFF1111, emissiveIntensity:1.5, transparent:true, opacity:.55});
+  checkDisc = new THREE.Mesh(dg, dm);
+  const p = sq3D(row, col);
+  checkDisc.position.set(p.x, BOARD_TOP+.03, p.z);
+  scene.add(checkDisc);
+  sqMeshes[row][col].material.emissive.setHex(0x550000);
+  sqMeshes[row][col].material.emissiveIntensity = .7;
+}
+
+// Sparkle burst on capture
+function sparkle(row, col) {
+  const p = sq3D(row, col);
+  for(let i=0; i<10; i++){
+    const sg = new THREE.SphereGeometry(.04, 6, 6);
+    const sm = new THREE.MeshPhongMaterial({
+      color:0xFFD700, emissive:0xFFAA00, emissiveIntensity:2.0, transparent:true
+    });
+    const s = new THREE.Mesh(sg, sm);
+    s.position.copy(p); s.position.y = BOARD_TOP + 0.3;
+    scene.add(s);
+    const angle = (i/10)*Math.PI*2, speed = .04+Math.random()*.06;
+    s._vx = Math.cos(angle)*speed; s._vy = .06+Math.random()*.05; s._vz = Math.sin(angle)*speed;
+    s._life = 1.0;
+    const remove = () => scene.remove(s);
+    anims.push({update(dt){
+      s.position.x += s._vx; s.position.y += s._vy; s.position.z += s._vz;
+      s._vy -= .004;
+      s._life -= dt * 2.5;
+      s.material.opacity = Math.max(0, s._life);
+      if(s._life <= 0){ remove(); return false; }
+      return true;
+    }});
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  ANIMATION SYSTEM
+// ═══════════════════════════════════════════════
+
+const anims = [];
+
+function animMove(pm, toRow, toCol, onDone) {
+  const from = pm.group.position.clone();
+  const to = sq3D(toRow, toCol);
+  const dur = 0.42;
+  let elapsed = 0;
+  anims.push({update(dt){
+    elapsed += dt;
+    const t = Math.min(elapsed/dur, 1);
+    const e = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+    pm.group.position.x = from.x + (to.x-from.x)*e;
+    pm.group.position.z = from.z + (to.z-from.z)*e;
+    pm.group.position.y = BOARD_TOP + Math.sin(t*Math.PI)*2.2;
+    if(t >= 1){ pm.group.position.copy(to); if(onDone) onDone(); return false; }
+    return true;
+  }});
+}
+
+function animCapture(pm, onDone) {
+  const dur = 0.28;
+  let elapsed = 0;
+  anims.push({update(dt){
+    elapsed += dt;
+    const t = Math.min(elapsed/dur, 1);
+    const s = 1 - t;
+    pm.group.scale.setScalar(s);
+    pm.group.position.y += dt * 3;
+    if(t >= 1){ scene.remove(pm.group); pm.alive = false; if(onDone) onDone(); return false; }
+    return true;
+  }});
+}
+
+// ═══════════════════════════════════════════════
+//  GAME LOGIC
+// ═══════════════════════════════════════════════
+
+function handleBoardClick(row, col) {
+  if(gs.gameOver || animating) return;
+
+  const p = gs.board[row][col];
+
+  if(gs.selected) {
+    const [sr, sc] = gs.selected;
+    const mv = gs.validMoves.find(([mr,mc]) => mr===row && mc===col);
+
+    if(mv) {
+      execMove(sr, sc, row, col, mv[2]||{});
+      return;
+    }
+    // Click own piece → select it
+    if(p && gc(p)===gs.turn) {
+      gs.selected = [row, col];
+      gs.validMoves = legalMoves(gs, row, col);
+      showSelection(row, col, gs.validMoves);
+      playTone('sel');
+      return;
+    }
+    // Click empty/invalid → deselect
+    gs.selected = null; gs.validMoves = [];
+    clearVisuals();
+    // Reset lifted piece
+    const pm = findPieceMesh(sr, sc);
+    if(pm) pm.group.position.y = BOARD_TOP;
+    return;
+  }
+
+  if(p && gc(p)===gs.turn) {
+    gs.selected = [row, col];
+    gs.validMoves = legalMoves(gs, row, col);
+    showSelection(row, col, gs.validMoves);
+    playTone('sel');
+  }
+}
+
+function execMove(fr, fc, tr, tc, ex) {
+  undoStack.push(cloneState(gs));
+  animating = true;
+
+  const piece = gs.board[fr][fc];
+  const capPiece = ex.enp ? gs.board[ex.epr][ex.epc] : gs.board[tr][tc];
+  const capPos = ex.enp ? [ex.epr, ex.epc] : [tr, tc];
+
+  // Update chess state
+  gs.board = applyTemp(gs.board, fr, fc, tr, tc, ex);
+  gs.enPassant = ex.ept || null;
+  const col = gc(piece), tp = gt(piece);
+  if(tp==='K'){ if(col==='w'){gs.cr.wK=false;gs.cr.wQ=false;}else{gs.cr.bK=false;gs.cr.bQ=false;} }
+  if(tp==='R'){
+    if(fr===7&&fc===7)gs.cr.wK=false; if(fr===7&&fc===0)gs.cr.wQ=false;
+    if(fr===0&&fc===7)gs.cr.bK=false; if(fr===0&&fc===0)gs.cr.bQ=false;
+  }
+  if(capPiece) gs.cap[col].push(capPiece);
+
+  let note = algb(fr,fc)+'→'+algb(tr,tc);
+  if(ex.castle) note = ex.castle==='K' ? 'O-O' : 'O-O-O';
+  if(capPiece) note += '✗';
+  gs.hist.push(note);
+
+  const selPm = findPieceMesh(fr, fc);
+  const capPm = capPiece ? findPieceMesh(capPos[0], capPos[1]) : null;
+
+  // Update piece mesh data immediately
+  if(selPm){ selPm.row = tr; selPm.col = tc; selPm.type = tp; }
+
+  // Handle castling rook
+  let rookPm = null, rookToC = -1;
+  if(ex.castle) {
+    const rookFromC = ex.castle==='K' ? 7 : 0;
+    rookToC = ex.castle==='K' ? 5 : 3;
+    rookPm = findPieceMesh(fr, rookFromC);
+    if(rookPm){ rookPm.row = fr; rookPm.col = rookToC; }
+  }
+
+  clearVisuals();
+  gs.selected = null; gs.validMoves = [];
+
+  function finish() {
+    // Pawn promotion?
+    const mp = gs.board[tr][tc];
+    if(gt(mp)==='P' && (tr===0||tr===7)){
+      pendingPromo = {row:tr, col:tc, col2:gc(mp), pm:selPm};
+      showPromo(gc(mp));
+      animating = false;
+      return;
+    }
+    finishTurn();
+  }
+
+  let pending = 1;
+  const done = () => { pending--; if(pending<=0) finish(); };
+
+  // Animate capture first (shrink away), then move
+  if(capPm) {
+    pending++;
+    sparkle(capPos[0], capPos[1]);
+    animCapture(capPm, done);
+  }
+  if(rookPm) {
+    pending++;
+    animMove(rookPm, fr, rookToC, done);
+  }
+  if(selPm) animMove(selPm, tr, tc, done);
+  else done();
+
+  playTone('move');
+}
+
+function finishTurn() {
+  gs.turn = opp(gs.turn);
+  const chk = inCheck(gs.board, gs.turn);
+  gs.check = chk;
+  const legal = anyLegal(gs, gs.turn);
+
+  if(!legal) {
+    gs.gameOver = true;
+    animating = false;
+    updatePanel();
+    setTimeout(()=>showGameOver(chk?'mate':'stale', opp(gs.turn)), 700);
+    return;
+  }
+
+  if(chk) {
+    // Show check indicator on king
+    for(let r=0;r<8;r++) for(let c=0;c<8;c++)
+      if(gs.board[r][c]===gs.turn+'K') showCheck(r, c);
+    playTone('chk');
+    document.getElementById('stMsg').textContent='⚔️ Check!';
+    document.getElementById('stMsg').classList.add('on');
+    document.getElementById('mCheck').classList.add('on');
+  } else {
+    document.getElementById('stMsg').classList.remove('on');
+    document.getElementById('mCheck').classList.remove('on');
+  }
+
+  animating = false;
+  updatePanel();
+}
+
+function showPromo(col) {
+  const opts = col==='w' ? ['wQ','wR','wB','wN'] : ['bQ','bR','bB','bN'];
+  document.getElementById('promoPieces').innerHTML =
+    opts.map(p=>`<div class="promoP" onclick="doPromo('${p}')">${SYM[p]}</div>`).join('');
+  document.getElementById('promoOverlay').classList.add('on');
+}
+
+function doPromo(pc) {
+  if(!pendingPromo) return;
+  const {row, col, col2, pm} = pendingPromo;
+  gs.board[row][col] = pc;
+  pendingPromo = null;
+  document.getElementById('promoOverlay').classList.remove('on');
+  // Replace piece mesh
+  if(pm){
+    scene.remove(pm.group);
+    const newG = createPieceMesh(gt(pc), col2);
+    newG.position.copy(sq3D(row, col));
+    newG.traverse(ch => { if(ch.isMesh) ch.userData = {type:'piece', idx: pieceMeshes.indexOf(pm)}; });
+    scene.add(newG);
+    pm.group = newG; pm.type = gt(pc);
+  }
+  finishTurn();
+}
+
+function showGameOver(reason, winner) {
+  const icon = document.getElementById('goIcon');
+  const title = document.getElementById('goTitle');
+  const sub = document.getElementById('goSub');
+  if(reason==='mate'){
+    icon.textContent = winner==='w' ? '👑' : '🌙';
+    title.textContent = winner==='w' ? 'White Kingdom Wins!' : 'Dark Kingdom Wins!';
+    sub.textContent = winner==='w' ? '✨ Light has conquered the darkness! ✨' : '🌙 The night has prevailed! 🌙';
+  } else {
+    icon.textContent = '🤝'; title.textContent = 'Stalemate!'; sub.textContent = '⚖️ Eternal peace between kingdoms! ⚖️';
+  }
+  document.getElementById('goOverlay').classList.add('on');
+  fireworks();
+}
+
+function newGame() {
+  document.getElementById('goOverlay').classList.remove('on');
+  document.getElementById('promoOverlay').classList.remove('on');
+  document.getElementById('stMsg').classList.remove('on');
+  document.getElementById('mCheck').classList.remove('on');
+  pendingPromo = null; undoStack = []; anims.length = 0; animating = false;
+  gs = initState();
+  initPieces();
+  updatePanel();
+}
+
+function undoMove() {
+  if(!undoStack.length || animating) return;
+  gs = undoStack.pop();
+  document.getElementById('goOverlay').classList.remove('on');
+  document.getElementById('stMsg').classList.remove('on');
+  document.getElementById('mCheck').classList.remove('on');
+  initPieces();
+  updatePanel();
+}
+
+function updatePanel() {
+  const c = gs.turn;
+  document.getElementById('ti').textContent = c==='w' ? '♔' : '♚';
+  const tn = document.getElementById('tn');
+  tn.textContent = c==='w' ? '☀️ White Kingdom' : '🌙 Dark Kingdom';
+  tn.className = 'turnNm ' + (c==='w'?'w':'b');
+  document.getElementById('wCap').textContent = gs.cap.w.map(p=>SYM[p]).join('') || '—';
+  document.getElementById('bCap').textContent = gs.cap.b.map(p=>SYM[p]).join('') || '—';
+  // Move history
+  let html='';
+  for(let i=0; i<gs.hist.length; i+=2)
+    html += `<div><span style="opacity:.4">${Math.floor(i/2)+1}.</span> ${gs.hist[i]||''} ${gs.hist[i+1]||''}</div>`;
+  const hb = document.getElementById('hist');
+  hb.innerHTML = html; hb.scrollTop = hb.scrollHeight;
+  // Mobile
+  document.getElementById('mTurn').textContent = c==='w' ? '☀️ White\'s Turn' : '🌙 Black\'s Turn';
+  document.getElementById('mWCap').textContent = 'White: ' + (gs.cap.w.map(p=>SYM[p]).join('')||'—');
+  document.getElementById('mBCap').textContent = 'Black: ' + (gs.cap.b.map(p=>SYM[p]).join('')||'—');
+}
+
+// Fireworks
+function fireworks() {
+  for(let i=0; i<35; i++) setTimeout(()=>{
+    const sg = new THREE.SphereGeometry(.06,6,6);
+    const colors = [0xFFD700,0xFF44FF,0x44FFFF,0xFF6644,0xAAFF44];
+    const sm = new THREE.MeshPhongMaterial({
+      color:colors[Math.floor(Math.random()*colors.length)],
+      emissive:0xFFFFFF, emissiveIntensity:1.5, transparent:true
+    });
+    const s = new THREE.Mesh(sg, sm);
+    s.position.set((Math.random()-0.5)*8, 4+Math.random()*4, (Math.random()-0.5)*8);
+    scene.add(s);
+    const angle = Math.random()*Math.PI*2, elev = Math.random()*Math.PI;
+    const speed = 0.05+Math.random()*0.09;
+    s._vx=Math.cos(angle)*Math.sin(elev)*speed; s._vy=Math.cos(elev)*speed+0.03; s._vz=Math.sin(angle)*Math.sin(elev)*speed;
+    s._life = 1;
+    anims.push({update(dt){
+      s.position.x+=s._vx; s.position.y+=s._vy; s.position.z+=s._vz;
+      s._vy-=.003;
+      s._life -= dt*1.2;
+      s.material.opacity = Math.max(0, s._life);
+      if(s._life<=0){ scene.remove(s); return false; }
+      return true;
+    }});
+  }, i * 120);
+}
+
+// ═══════════════════════════════════════════════
+//  INPUT — MOUSE + TOUCH
+// ═══════════════════════════════════════════════
+
+const raycaster = new THREE.Raycaster();
+const mouse2D = new THREE.Vector2();
+
+function getCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  let x, y;
+  if(e.changedTouches && e.changedTouches.length > 0){
+    x = e.changedTouches[0].clientX; y = e.changedTouches[0].clientY;
+  } else {
+    x = e.clientX; y = e.clientY;
+  }
+  return {
+    nx: ((x - rect.left) / rect.width) * 2 - 1,
+    ny: -((y - rect.top) / rect.height) * 2 + 1
+  };
+}
+
+function pick(e) {
+  const {nx, ny} = getCoords(e);
+  mouse2D.set(nx, ny);
+  raycaster.setFromCamera(mouse2D, camera);
+  const hits = raycaster.intersectObject(pickPlane);
+  if(!hits.length) return;
+  const pt = hits[0].point;
+  const col = Math.floor(pt.x + 4);
+  const row = Math.floor(pt.z + 4);
+  if(row>=0 && row<8 && col>=0 && col<8) handleBoardClick(row, col);
+}
+
+let touchStart = null;
+canvas.addEventListener('mousedown', pick, false);
+canvas.addEventListener('touchstart', e => {
+  touchStart = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+  e.preventDefault();
+}, {passive:false});
+canvas.addEventListener('touchend', e => {
+  if(!touchStart) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  if(Math.sqrt(dx*dx+dy*dy) < 12) pick(e);
+  touchStart = null;
+  e.preventDefault();
+}, {passive:false});
+
+// ═══════════════════════════════════════════════
+//  SOUND (Web Audio API)
+// ═══════════════════════════════════════════════
+
+let actx = null;
+function ac(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); return actx; }
+function playTone(t){
+  try{
+    const ctx=ac(), now=ctx.currentTime;
+    const mk=(freq,type,start,dur,vol=.12)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type=type; o.frequency.value=freq;
+      g.gain.setValueAtTime(vol, now+start);
+      g.gain.exponentialRampToValueAtTime(.001, now+start+dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(now+start); o.stop(now+start+dur+.05);
+    };
+    if(t==='sel') mk(660,'sine',0,.1,.1);
+    else if(t==='move'){ mk(524,'sine',0,.07,.12); mk(660,'sine',.07,.09,.1); }
+    else if(t==='chk'){ mk(220,'sawtooth',0,.14,.2); mk(185,'sawtooth',.1,.18,.15); }
+    else if(t==='new') [524,660,784,1048].forEach((f,i)=>mk(f,'sine',i*.1,.15,.13));
+  } catch(e){}
+}
+
+// ═══════════════════════════════════════════════
+//  RENDER LOOP
+// ═══════════════════════════════════════════════
+
+let lastT = 0;
+
+function animate(time) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((time - lastT) / 1000, 0.05);
+  lastT = time;
+  const t = time * 0.001;
+
+  // Update animations
+  for(let i = anims.length-1; i>=0; i--)
+    if(!anims[i].update(dt)) anims.splice(i,1);
+
+  // Animate selection ring
+  if(selRing){
+    selRing.rotation.z += dt * 1.6;
+    selRing.material.emissiveIntensity = 0.8 + Math.sin(t*5)*0.5;
+  }
+  // Animate move dots
+  moveDots.forEach((d,i)=>{
+    d.material.emissiveIntensity = 0.9 + Math.sin(t*5+i*1.2)*0.5;
+    d.position.y = BOARD_TOP + 0.02 + Math.sin(t*4+i)*0.015;
+  });
+  // Animate check disc
+  if(checkDisc) checkDisc.material.emissiveIntensity = 1.0 + Math.sin(t*7)*0.6;
+
+  // Candle flicker
+  candleLights.forEach((l, i) => {
+    if(l.light) {
+      l.light.intensity = .7 + Math.sin(t*7+l._phase||0)*.22 + Math.sin(t*13+i)*.1;
+      if(l.flame) l.flame.position.y = l.flame._baseY + Math.sin(t*9+l._phase)*0.03;
+    }
+  });
+
+  // Gentle gold point light pulse
+  goldPt.intensity = 1.8 + Math.sin(t*0.8)*0.3;
+
+  renderer.render(scene, camera);
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+
+initPieces();
+updatePanel();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
