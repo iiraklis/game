@@ -4,16 +4,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Urban Bike Courier — Sunset Rush</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urban Bike Courier вЂ” Sunset Rush</title>
     <style>
-        body { margin: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        canvas { border: 1px solid white; }
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { max-width: 100%; overflow-x: hidden; }
+        body { margin: 0; background: black; display: flex; justify-content: center; align-items: center; min-height: 100svh; }
+        canvas { border: 1px solid white; display: block; max-width: 100vw; max-height: 100svh; width: auto; height: auto; }
+        button { max-width: calc(100vw - 24px); touch-action: manipulation; }
+        @media (max-width: 700px) {
+            button { top: 12px !important; left: 12px !important; padding: 8px 12px !important; font-size: 14px; }
+        }
     </style>
 </head>
 <body>
 
     <button onclick="window.location.href='../index.html'" style="position: absolute; top: 20px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    ⬅ Main Menu
+    в¬… Main Menu
   </button>
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -454,7 +461,7 @@
             // Title
             ctx.fillStyle = 'white';
             ctx.font = '40px Arial';
-            ctx.fillText('Urban Bike Courier — Sunset Rush', 50, 100);
+            ctx.fillText('Urban Bike Courier вЂ” Sunset Rush', 50, 100);
             // Instructions
             ctx.font = '20px Arial';
             ctx.fillText('Deliver parcels to checkpoints in the city before time runs out.', 50, 150);
