@@ -4,53 +4,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Urban Bike Courier вЂ” Sunset Rush</title>
+    <title>Urban Bike Courier — Sunset Rush</title>
     <style>
         body { margin: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; }
         canvas { border: 1px solid white; }
     </style>
-
-  <style id="ai-games-responsive-fix">
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { max-width: 100%; overflow-x: hidden; }
-    body { min-height: 100svh; }
-    img, svg, video { max-width: 100%; height: auto; }
-    canvas {
-      max-width: 100%;
-      height: auto;
-      display: block;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    button, input, select, textarea, a { max-width: 100%; }
-    button, .button, .btn, a[role="button"] { touch-action: manipulation; }
-    .container, .game-container, .game-area, .game-wrapper, .game-board,
-    .board, .controls, .ui, .hud, .menu, .screen, .instructions,
-    #gameContainer, #gameArea, #gameBoard, #controls, #hud {
-      max-width: 100%;
-    }
-    .controls, .buttons, .button-row, .score-container, .menu-buttons,
-    .settings, .settings-row, .actions, nav {
-      flex-wrap: wrap;
-    }
-    @media (max-width: 700px) {
-      body { min-height: 100svh; }
-      h1 { font-size: clamp(1.6rem, 8vw, 3rem); line-height: 1.1; }
-      button, .button, .btn, input, select {
-        font-size: clamp(0.9rem, 4vw, 1rem);
-      }
-      .controls, .instructions, .ui, .hud {
-        overflow-wrap: anywhere;
-      }
-    }
-  </style>
 </head>
 <body>
 
     <button onclick="window.location.href='../index.html'" style="position: absolute; top: 20px; left: 20px; z-index: 999; padding: 10px 16px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer;">
-    в¬… Main Menu
+    ⬅ Main Menu
   </button>
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -477,7 +440,7 @@
             ctx.fillRect(canvas.width - miniSize - 10 + (player.x / MAP_WIDTH) * miniSize - 2, 10 + (player.y / MAP_HEIGHT) * miniSize - 2, 4, 4);
             // Checkpoint dot
             ctx.fillStyle = 'lime';
-            ctx.fillRect(canvas.width - miniSize - 10 + (checkpoint.x / MAP_WIDTH) * miniSize - 2, 4, 4);
+            ctx.fillRect(canvas.width - miniSize - 10 + (checkpoint.x / MAP_WIDTH) * miniSize - 2, 10 + (checkpoint.y / MAP_HEIGHT) * miniSize - 2, 4, 4);
         }
 
         // Draw Start Screen
@@ -491,7 +454,7 @@
             // Title
             ctx.fillStyle = 'white';
             ctx.font = '40px Arial';
-            ctx.fillText('Urban Bike Courier вЂ” Sunset Rush', 50, 100);
+            ctx.fillText('Urban Bike Courier — Sunset Rush', 50, 100);
             // Instructions
             ctx.font = '20px Arial';
             ctx.fillText('Deliver parcels to checkpoints in the city before time runs out.', 50, 150);
